@@ -14,9 +14,15 @@ Each comparison repetition gets eight independent pilot seeds per arm. I reuse t
 
 I select the number of repetitions from 30, 40 or 50 using only cloud throughput and the available allocation before statistical pilots, not their outcome scores. All pairs are specified before collection. Counts above 512 per arm, zero effects and zero total pilot variances stay in the plan as ineligible. I neither discard inconvenient completed outcomes nor silently reduce a requested count while advertising an 80% plan.
 
+I selected **50 repetitions** from cloud training throughput before statistical pilots. **8,000 pilot roots** and **65,744 fresh confirmation roots** represent **3.90 billion training transitions** in the published data ([raw pilots](../results/neural/pilot/runs.jsonl.gz), [raw confirmation](../results/neural/confirmation/runs.jsonl.gz), [environment](../results/neural/confirmation/environment.json)).
+
 I commit and push the complete comparison/repetition design, seed ranges, raw pilots and derived count plan before any confirmation seed runs. The runner requires the pushed plan commit, unchanged training source/design/count files, and fresh reserved seed ranges. The transport runner can change without changing that statistical plan. Every executable plan receives exactly its requested fresh count; no pilot score enters the confirmation test. Duplicate padding only keeps the execution shape stable and is discarded, never counted as independent evidence.
 
+I retain all **93/400** different-variant plans above the **512-seed-per-arm** limit in the [count plan](../results/neural/pilot_plan.json). Executable counts had median **37**, interquartile range **4–120.5**. Twenty detections reversed the pilot's direction. Per-comparison detection rates ranged **2.9–94.0%** ([figure](../figures/neural_comparisons.png)).
+
 I report independent two-sided Welch detections (`p < 0.05`) for every executable different-variant cell, direction reversals, eligibility, raw seed counts, per-task/per-comparison frequencies and descriptive Wilson intervals. Two constant groups have no estimable t distribution: I retain the original declared conventions of p=1 for identical constants and p=0 for distinct constants, label every such case, and also summarize ordinary Welch tests separately. Null controls are separate. There is no multiplicity correction because the outcome is marginal detection frequency, not a list of simultaneously discovered algorithm improvements. Different variants are not known true alternatives; the pooled rate is not power at a known population gap.
+
+Same-variant controls rejected in **7/74 tests (9.5%; 4.7–18.3%)**; CartPole alone rejected in **5/36 (13.9%; 6.1–28.7%)**. I do not claim exact 5% calibration. All 381 completed tests used ordinary Welch calculations, with no constant-group conventions triggered.
 
 ## What the comparison can and cannot say
 

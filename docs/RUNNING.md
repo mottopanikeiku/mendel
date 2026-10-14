@@ -32,6 +32,8 @@ uv run python scripts/analyze.py confirmation --confirmation results/replication
 
 A Modal account is required only for training. Each container requests one CPU core and 1 GiB RAM; numerical libraries use one thread, with at most eight concurrent containers. The exact cloud environments and per-batch execution durations are in `results/*/environment.json`. Modal's sandbox reports the CPU model as unknown. I report cloud costs conservatively, not laptop training times or a throughput ranking.
 
+I estimate the original cloud compute, including failed attempts, at **$0.0221, rounded up to $0.03**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/cost.json)).
+
 ## Export or reproduce neural PPO confirmation
 
 I pushed the complete neural count plan at
@@ -49,6 +51,8 @@ uv run python scripts/neural_figures.py --neural results/replication/neural/summ
 Each GPU container requests one L4, two CPU cores and 8 GiB RAM; the concurrency limit is one. Roots are vmapped in batches of 64. Every complete batch is committed to the dedicated `seed-power-day-results` Volume before being returned. Existing batches for the same design, count plan, committed training-source tree and immutable runtime image are exported rather than retrained. Five sequential fresh-client attempts share the overall deadline, and rerunning resumes only missing batches. An empty cache trains the same pseudorandom roots again; that is reproducibility, not additional independent evidence. No model weights are downloaded. Per-batch persistence adds substantial cloud wall time; the throughput forecast measures training only, not total export time.
 
 The CPU-only neural correctness tests are optional locally (`uv sync --locked --python 3.12 --extra neural`); CI installs that extra and exercises them. [Neural protocol and limitations](NEURAL_PROTOCOL.md).
+
+I estimate neural cloud compute, including failed attempts, at **$1.1905, rounded up to $1.20**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/neural/cost.json)).
 
 
 ## Run a new pilot and confirmation
