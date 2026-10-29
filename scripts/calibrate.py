@@ -90,9 +90,12 @@ def reference_rows(trials):
             rate = float(reject.mean())
             formula = float(sim.planning_power(abs(truth) / math.sqrt(total),
                                                arm_a.variance / total, n))
-            exact = wrong = None
+            exact = wrong = error = None
             if gaussian(arm_a) and gaussian(arm_b):
                 exact, wrong = sim.exact_welch(truth, arm_a.variance, arm_b.variance, n)
+                fine, _ = sim.exact_welch(truth, arm_a.variance, arm_b.variance, n,
+                                          nodes=2 * sim.NODES)
+                error = abs(exact - fine)
             rows.append({
                 "population": family, "truth_label": label, "truth_effect": truth,
                 "seeds_per_arm": n, "trials": trials, "mc_rate": rate,
@@ -100,43 +103,66 @@ def reference_rows(trials):
                 "mc_wrong_sign": (float((reject & (np.sign(gap) != np.sign(truth))).mean())
                                   if label != "null" else None),
                 "noncentral_t_formula": formula if label != "null" else sim.ALPHA,
-                "exact_rate": exact, "exact_wrong_sign": wrong,
+                "exact_rate": exact, "exact_wrong_sign": wrong, "exact_numerical_error": error,
             })
     return rows
 
 
+EXACT_COLUMNS = ("exact_workflow_rate", "exact_eligibility", "exact_mean_total_seeds",
+                 "exact_wrong_sign_rate")
+
+
+def exact_columns(rule, pilot, arm_a, arm_b, effect, truth, table, nodes, null):
+    """Exact workflow columns for equal-variance Gaussian arms at one node count."""
+    rejection, wrong = table
+    if rule == "known_variance":
+        pmf = np.zeros(sim.CAP + 1)
+        pmf[plan_seeds(effect, arm_a.variance, arm_b.variance)] = 1.0
+    else:
+        pmf, _ = sim.exact_plan_distribution(rule, pilot, arm_a.sd, effect, truth, nodes=nodes)
+    return {
+        "exact_workflow_rate": float(pmf @ rejection),
+        "exact_eligibility": float(pmf.sum()),
+        "exact_mean_total_seeds": float(2 * pilot + 2 * pmf @ np.arange(pmf.size)),
+        "exact_wrong_sign_rate": None if null else float(pmf @ wrong),
+    }
+
+
 def workflow_rows(outer, inner):
-    """Every rule on every population, truth and pilot size, with exact Gaussian columns."""
+    """Every rule on every population, truth and pilot size, with exact Gaussian columns.
+
+    Each exact column has a numerical-error column: its change when the
+    quadrature node count doubles. ``exact_table_numerical_error`` bounds the
+    same change in the fixed-count Welch rejections behind conditional_exact_rate.
+    """
     rows, tables = [], {}
     for index, (family, label, arm_a, arm_b, effect) in enumerate(sim.scenarios()):
         truth = arm_a.mean - arm_b.mean
-        exact = None
+        exact = table_error = None
         if gaussian(arm_a) and gaussian(arm_b):
-            tables[index] = sim.exact_welch_table(truth, arm_a.variance, arm_b.variance)
-            exact = tables[index][0]
+            tables[index] = [sim.exact_welch_table(truth, arm_a.variance, arm_b.variance,
+                                                   nodes=nodes)
+                             for nodes in (sim.NODES, 2 * sim.NODES)]
+            exact = tables[index][0][0]
+            table_error = float(np.abs(exact - tables[index][1][0]).max())
         equal = exact is not None and arm_a.sd == arm_b.sd
         for pilot_index, pilot in enumerate(sim.PILOT_SIZES):
             simulated = sim.simulate(arm_a, arm_b, effect, pilot, outer, inner, SEED,
                                      (0, index, pilot_index), exact,
                                      null=label == "null")
             for row in simulated:
-                extra = {"exact_workflow_rate": None, "exact_eligibility": None,
-                         "exact_mean_total_seeds": None, "exact_wrong_sign_rate": None}
+                extra = dict.fromkeys(EXACT_COLUMNS)
+                extra.update((f"{key}_numerical_error", None) for key in EXACT_COLUMNS)
                 if equal:
-                    rejection, wrong = tables[index]
-                    if row["rule"] == "known_variance":
-                        pmf = np.zeros(sim.CAP + 1)
-                        pmf[plan_seeds(effect, arm_a.variance, arm_b.variance)] = 1.0
-                    else:
-                        pmf, _ = sim.exact_plan_distribution(row["rule"], pilot, arm_a.sd,
-                                                             effect, truth)
-                    extra = {
-                        "exact_workflow_rate": float(pmf @ rejection),
-                        "exact_eligibility": float(pmf.sum()),
-                        "exact_mean_total_seeds": float(2 * pilot + 2 * pmf @ np.arange(pmf.size)),
-                        "exact_wrong_sign_rate": (float(pmf @ wrong) if label != "null"
-                                                  else None),
-                    }
+                    coarse, fine = (
+                        exact_columns(row["rule"], pilot, arm_a, arm_b, effect, truth, table,
+                                      nodes, label == "null")
+                        for table, nodes in zip(tables[index], (sim.NODES, 2 * sim.NODES)))
+                    extra.update(coarse)
+                    extra.update((f"{key}_numerical_error",
+                                  None if coarse[key] is None else abs(coarse[key] - fine[key]))
+                                 for key in EXACT_COLUMNS)
+                extra["exact_table_numerical_error"] = table_error
                 rows.append({"population": family, "truth_label": label, "truth_effect": truth,
                              "meaningful_effect": effect, "pilot_seeds": pilot, **row, **extra})
     return rows
@@ -239,11 +265,13 @@ def pool_summary(pools):
 def recommend(workflow):
     """Cheapest pilot-only rule that keeps every SIM population near the target.
 
-    A rule holds at a pilot size if its workflow power at the meaningful effect
-    is at least TARGET - TOLERANCE in every Gaussian, bounded and bimodal
-    population. Among rules that hold at every pilot size, the lowest mean
-    total seed cost wins. If none does, the rule with the best worst case wins
-    and ``holds_everywhere`` is False.
+    A rule holds at a pilot size if its simulated workflow power at the
+    meaningful effect is at least TARGET - TOLERANCE in every Gaussian, bounded
+    and bimodal population. That classifies Monte Carlo point estimates; it
+    does not show the true power is above the line, so each entry keeps the
+    lowest population and its SE. Among rules that hold at every pilot size,
+    the lowest mean total seed cost wins. If none does, the rule with the best
+    worst case wins and ``holds_everywhere`` is False.
     """
     by_rule = {}
     for rule in sim.PILOT_RULES:
@@ -251,8 +279,11 @@ def recommend(workflow):
         for pilot in sim.PILOT_SIZES:
             rows = select(workflow, rule=rule, pilot_seeds=pilot, truth_label="meaningful")
             powers = [row["workflow_rate"] for row in rows]
+            lowest = rows[powers.index(min(powers))]
             by_rule[rule].append({
                 "pilot_seeds": pilot, "min_power": min(powers), "max_power": max(powers),
+                "lowest_population": lowest["population"],
+                "min_power_mc_se": lowest["workflow_mc_se"],
                 "mean_total_seeds": float(np.mean([row["mean_total_seeds"] for row in rows])),
                 "holds": min(powers) >= sim.TARGET - TOLERANCE,
             })
@@ -320,6 +351,24 @@ def render_report(configuration, reference, workflow, resampling, recommendation
                  else "held at every pilot size" if held else "held at no pilot size")
         others.append(f"`{rule}` {where} and used {average[rule] / average[chosen]:.2f} times "
                       "the seeds on average")
+    line = sim.TARGET - TOLERANCE
+    close = [(rule, entry) for rule in sim.PILOT_RULES for entry in by_rule[rule]
+             if abs(entry["min_power"] - line) <= 1.96 * entry["min_power_mc_se"]]
+    calls = "; ".join(
+        f"`{rule}` at {entry['pilot_seeds']} pilot seeds, "
+        f"{FAMILY_LABELS[entry['lowest_population']]}: {percent(entry['min_power'])} ± "
+        f"{100 * 1.96 * entry['min_power_mc_se']:.1f}" for rule, entry in close)
+    margin = min((entry["min_power"] - line) / entry["min_power_mc_se"]
+                 for entry in by_rule[chosen])
+    holds_note = (
+        f"\"Held\" compares simulated point estimates with {percent(line)}; it does not show "
+        "that a rule's true power is above that line. "
+        + ((f"This call is within a 95% Monte Carlo half-width of the line: {calls}. "
+            if len(close) == 1 else
+            f"These calls are within a 95% Monte Carlo half-width of the line: {calls}. ")
+           if close else "No call is within a 95% Monte Carlo half-width of the line. ")
+        + f"The closest call for `{chosen}` is {abs(margin):.1f} Monte Carlo SEs "
+        + ("above" if margin >= 0 else "below") + " the line.")
     real = select(resampling, rule=chosen)
     shifted = select(real, kind="shift")
     real_nulls = select(real, kind="null")
@@ -352,7 +401,7 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         + span([value for entry in by_rule[chosen]
                 for value in (entry["min_power"], entry["max_power"])])
         + " over all populations and pilot sizes. "
-        + "Among the other fixed-effect rules, " + "; ".join(others) + ".",
+        + "Among the other fixed-effect rules, " + "; ".join(others) + ". " + holds_note,
         "3. If the true effect is only half the one you planned for, no rule rescues the "
         f"study: the fixed-effect rules gave {span([row['workflow_rate'] for row in half])} "
         "power (SIM).",
@@ -449,6 +498,14 @@ def render_report(configuration, reference, workflow, resampling, recommendation
     gaps = {small: max(abs(row["noncentral_t_formula"] - row["exact_rate"]) for row in fixed
                        if row["truth_label"] != "null" and (row["seeds_per_arm"] < 8) == small)
             for small in (True, False)}
+    numerical = {
+        "two": max(row["exact_numerical_error"] for row in fixed if row["seeds_per_arm"] == 2),
+        "more": max(row["exact_numerical_error"] for row in fixed if row["seeds_per_arm"] > 2),
+        "workflow": max(row[f"{key}_numerical_error"] for row in exact_rows
+                        for key in ("exact_workflow_rate", "exact_eligibility")),
+        "seeds": max(row["exact_mean_total_seeds_numerical_error"] for row in exact_rows),
+    }
+    smallest_se = min(row["workflow_mc_se"] for row in exact_rows if row["workflow_mc_se"] > 0)
     lines += [
         "For equal-variance Gaussian arms I compute every rule's plan distribution, power, "
         "eligibility, cost and wrong-sign rate by quadrature, with no Monte Carlo error "
@@ -461,6 +518,18 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         "formula differed from exact Welch power by at most "
         f"{100 * gaps[True]:.2f} points below 8 seeds per arm and {100 * gaps[False]:.2f} "
         "points from 8 seeds on.",
+        "",
+        "The quadrature has numerical error, which I report separately from Monte Carlo "
+        "error (`*_numerical_error` columns). I estimate it as the change in each exact value "
+        f"when the nodes double from {sim.NODES} to {2 * sim.NODES}; tests check that this "
+        "estimate bounds the error against an independent adaptive integration. For "
+        f"fixed-count Welch rejection it is at most {numerical['two']:.1e} at 2 seeds per arm, "
+        "where each sample variance has one degree of freedom, and at most "
+        f"{numerical['more']:.1e} from 3 seeds on. For workflow power and eligibility it is at "
+        f"most {numerical['workflow']:.1e}, and for mean total seeds "
+        f"{numerical['seeds']:.1e} seeds. The smallest Monte Carlo SE of workflow power in "
+        f"those rows is {smallest_se:.4f}. Every check above allows 4.5 Monte Carlo SEs plus "
+        "the numerical error.",
         "",
         "## Committed PPO roots, resampled",
         "",
@@ -643,6 +712,11 @@ def build(root, sizes):
         "maximum_seeds_per_arm": sim.CAP, "ucl_level": sim.UCL_LEVEL,
         "pilot_sizes": list(sim.PILOT_SIZES), "rules": list(sim.RULES),
         "recommendation_tolerance": TOLERANCE,
+        "quadrature_nodes": sim.NODES,
+        "numerical_error": ("Each *_numerical_error column is |exact value at quadrature_nodes "
+                            "- exact value at twice as many nodes|; exact_table_numerical_error "
+                            "is the largest such change in fixed-count Welch rejection over "
+                            "2..512 seeds per arm."),
         "streams": ("NumPy PCG64 from SeedSequence(seed, spawn_key=key). Workflow: "
                     "(0, scenario, pilot index, 0) pilots and (..., 1 + rule index) "
                     "confirmations. Fixed-count reference: (1, scenario, count index). "
@@ -699,34 +773,37 @@ def compare_json(fresh, committed, where):
         assert type(fresh) is type(committed) and fresh == committed, where
 
 
-def within(value, reference, se):
-    """Within 4.5 Monte Carlo SEs, plus float rounding of the exact reference."""
-    return abs(value - reference) <= 4.5 * se + 1e-12
+def within(value, reference, se, numerical=0.0):
+    """Within 4.5 Monte Carlo SEs plus the reference's quadrature error and float rounding."""
+    return abs(value - reference) <= 4.5 * se + numerical + 1e-12
 
 
 def check_claims(result):
-    """The claims the report relies on, each within stated Monte Carlo tolerance."""
+    """The claims the report relies on, each within stated Monte Carlo and numerical error."""
     for row in result["reference"]:
         if row["exact_rate"] is not None:
             exact = row["exact_rate"]
-            assert within(row["mc_rate"], exact,
-                          math.sqrt(exact * (1 - exact) / row["trials"])), row
+            assert within(row["mc_rate"], exact, math.sqrt(exact * (1 - exact) / row["trials"]),
+                          row["exact_numerical_error"]), row
     for row in result["workflow"]:
         accounted = row["undefined_plans"] + row["over_cap_plans"] + row["executed_plans"]
         assert accounted == row["pilots"], row
         tests = row["pilots"] * row["confirmations_per_pilot"]
         if row["exact_workflow_rate"] is not None:
-            for key, se_key, floor in (
-                    ("workflow_rate", "workflow_mc_se", tests),
-                    ("eligibility", "eligibility_mc_se", row["pilots"])):
+            for key, se_key, floor, numerical in (
+                    ("workflow_rate", "workflow_mc_se", tests,
+                     row["exact_workflow_rate_numerical_error"]),
+                    ("eligibility", "eligibility_mc_se", row["pilots"],
+                     row["exact_eligibility_numerical_error"])):
                 exact = row[f"exact_{key}"]
                 se = max(row[se_key], math.sqrt(max(exact * (1 - exact), 0.0) / floor))
-                assert within(row[key], exact, se), (key, row)
+                assert within(row[key], exact, se, numerical), (key, row)
             assert within(row["mean_total_seeds"], row["exact_mean_total_seeds"],
-                          row["mean_total_seeds_mc_se"]), row
+                          row["mean_total_seeds_mc_se"],
+                          row["exact_mean_total_seeds_numerical_error"]), row
         if row["conditional_exact_rate"] is not None:
             assert within(row["workflow_rate"], row["conditional_exact_rate"],
-                          row["conditional_exact_mc_se"]), row
+                          row["conditional_exact_mc_se"], row["exact_table_numerical_error"]), row
     for row in result["resampling"]:
         accounted = (row["undefined_plans"] + row["over_cap_plans"]
                      + row["pool_limited_plans"] + row["executed_plans"])
@@ -734,14 +811,18 @@ def check_claims(result):
 
 
 NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
+TAG = re.compile(r"<[^>]*>")
+GEOMETRY = re.compile(r'(\s(?:d|x|y|width|height|transform|viewBox)=")([^"]*)(")')
 
 
 def same_svg(fresh, committed):
     """Identical SVG text, with drawn coordinates allowed to differ in the sixth figure.
 
     The tables already match to a relative 1e-12. Matplotlib's last printed
-    coordinate digit can still differ between x86-64 and arm64, so every
-    number in the SVG may differ by a relative 1e-6 and everything else must match.
+    coordinate digit can still differ between x86-64 and arm64, so numbers in
+    geometry attributes (path data, positions, sizes, transforms and the view
+    box) may differ by a relative 1e-6. Text, styles, ids and everything else
+    must match exactly.
     """
     return svg_difference(fresh, committed) is None
 
@@ -754,21 +835,33 @@ def canonical_clip_ids(svg):
     return CLIP_ID.sub(lambda match: names.setdefault(match.group(), f"clip-{len(names)}"), svg)
 
 
+def split_geometry(svg):
+    """The SVG with geometry-attribute numbers replaced by '#', and those numbers in order."""
+    numbers = []
+
+    def attribute(match):
+        numbers.extend(NUMBER.findall(match.group(2)))
+        return match.group(1) + NUMBER.sub("#", match.group(2)) + match.group(3)
+
+    return TAG.sub(lambda tag: GEOMETRY.sub(attribute, tag.group()), svg), numbers
+
+
 def svg_difference(fresh, committed):
-    """None if same_svg holds, otherwise the first differing text or number.
+    """None if same_svg holds, otherwise the first differing text or coordinate.
 
     Matplotlib names each clip path by hashing its rectangle, so a last-digit
     layout difference renames it. Ids are renumbered in order of appearance;
-    the rectangles themselves are still compared as numbers.
+    the rectangles themselves are still compared as coordinates.
     """
-    fresh, committed = canonical_clip_ids(fresh), canonical_clip_ids(committed)
-    texts = NUMBER.split(fresh), NUMBER.split(committed)
-    if texts[0] != texts[1]:
-        index = next((i for i, (a, b) in enumerate(zip(*texts)) if a != b), min(map(len, texts)))
-        return f"text {index}: {texts[0][index:index + 2]!r} vs {texts[1][index:index + 2]!r}"
-    for a, b in zip(NUMBER.findall(fresh), NUMBER.findall(committed), strict=True):
+    (left, left_numbers), (right, right_numbers) = (
+        split_geometry(canonical_clip_ids(svg)) for svg in (fresh, committed))
+    if left != right:
+        index = next((i for i, (a, b) in enumerate(zip(left, right)) if a != b),
+                     min(len(left), len(right)))
+        return f"text at {index}: {left[index:index + 40]!r} vs {right[index:index + 40]!r}"
+    for a, b in zip(left_numbers, right_numbers, strict=True):
         if not math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-6):
-            return f"number {a} vs {b}"
+            return f"coordinate {a} vs {b}"
     return None
 
 

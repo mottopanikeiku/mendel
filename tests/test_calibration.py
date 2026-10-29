@@ -3,9 +3,11 @@
 from fractions import Fraction
 
 import math
+import re
 
 import numpy as np
 import pytest
+from scipy.integrate import dblquad
 from scipy.stats import chi2, nct, norm, t
 
 from scripts import calibrate
@@ -102,6 +104,48 @@ def test_pooled_quadrature_reproduces_noncentral_t_power(n, gap):
     expected = sim.two_sided_nct(critical, 2 * n - 2, gap / math.sqrt(2 / n))
     # 48 probit-Hermite nodes: about 1e-8 at n=2, rounding error from n=5 on.
     assert exact == pytest.approx(float(expected), abs=1e-7)
+
+
+def adaptive_welch(gap, variance_a, variance_b, n, alpha=0.05):
+    """Independent reference: adaptive 2-D integration over both chi-square probabilities."""
+    k = n - 1
+    spread = math.sqrt((variance_a + variance_b) / n)
+
+    def rejection(v, u):
+        sample_a = variance_a * chi2.ppf(u, k) / k
+        sample_b = variance_b * chi2.ppf(v, k) / k
+        df = k * (sample_a + sample_b) ** 2 / (sample_a**2 + sample_b**2)
+        threshold = t.isf(alpha / 2, df) * math.sqrt((sample_a + sample_b) / n)
+        return norm.sf((threshold - gap) / spread) + norm.cdf((-threshold - gap) / spread)
+
+    value, error = dblquad(rejection, 0.0, 1.0, 0.0, 1.0, epsabs=1e-11, epsrel=1e-11)
+    assert error < 1e-10
+    return value
+
+
+@pytest.mark.parametrize("gap,variance_a,variance_b,n", [
+    (0.5, 1.0, 1.0, 2), (0.0, 1.0, 1.0, 2), (0.5, 1.0, 4.0, 2), (0.5, 0.25, 1.0, 3)])
+def test_welch_quadrature_error_is_bounded_by_the_reported_doubling_estimate(
+        gap, variance_a, variance_b, n):
+    reference = adaptive_welch(gap, variance_a, variance_b, n)
+    values = [sim.exact_welch(gap, variance_a, variance_b, n, nodes=nodes)[0]
+              for nodes in (sim.NODES, 2 * sim.NODES, 4 * sim.NODES, 8 * sim.NODES)]
+    errors = [abs(value - reference) for value in values]
+    # The reported numerical error, the change from NODES to 2 * NODES, bounds the
+    # error of the published value. One df per variance (n = 2) converges slowest.
+    assert errors[0] <= 1.1 * abs(values[0] - values[1]) + 1e-10
+    assert errors[0] < (5e-5 if n == 2 else 1e-9)
+    # More nodes keep converging and stay finite, down to the reference's accuracy.
+    assert errors[1] < errors[0] and errors[3] < 1e-9
+
+
+@pytest.mark.parametrize("rule", sim.PILOT_RULES)
+def test_exact_plan_distribution_converges_in_its_share_nodes(rule):
+    pmf, over = sim.exact_plan_distribution(rule, 8, 1.0, 0.5, 0.25, cap=64)
+    finer, finer_over = sim.exact_plan_distribution(rule, 8, 1.0, 0.5, 0.25, cap=64,
+                                                    nodes=2 * sim.NODES)
+    assert np.abs(pmf - finer).max() < 1e-10 and abs(over - finer_over) < 1e-10
+
 
 
 @pytest.mark.parametrize("n,gap", [(3, 1.5), (12, 0.0), (12, 1.2)])
@@ -236,14 +280,19 @@ def workflow_fixture(powers):
             for family in sim.FAMILIES:
                 rows.append({"rule": rule, "pilot_seeds": pilot, "truth_label": "meaningful",
                              "population": family, "workflow_rate": power,
-                             "mean_total_seeds": seeds})
+                             "workflow_mc_se": 0.004, "mean_total_seeds": seeds})
     return rows
 
 
 def test_recommendation_is_the_cheapest_rule_that_holds_everywhere():
     rows = workflow_fixture({"observed_gap": (0.5, 100), "fixed_effect": (0.77, 150),
                              "variance_nct": (0.79, 170), "variance_ucl": (0.9, 230)})
-    assert calibrate.recommend(rows)["rule"] == "variance_nct"
+    recommendation = calibrate.recommend(rows)
+    assert recommendation["rule"] == "variance_nct"
+    # "Holds" classifies point estimates; each entry keeps the lowest population and its SE.
+    entry = recommendation["by_rule"]["fixed_effect"][0]
+    assert entry["min_power_mc_se"] == 0.004 and entry["lowest_population"] in sim.FAMILIES
+    assert not entry["holds"]
     rows = workflow_fixture({"observed_gap": (0.5, 100), "fixed_effect": (0.6, 150),
                              "variance_nct": (0.7, 170), "variance_ucl": (0.75, 230)})
     recommendation = calibrate.recommend(rows)
@@ -294,3 +343,22 @@ def test_svg_comparison_allows_only_tiny_coordinate_differences():
     renamed = '<clipPath id="pabc12345678"><rect x="1"/></clipPath><g clip-path="url(#pabc12345678)"/>'
     assert calibrate.same_svg(renamed.replace("pabc12345678", "pdef98765432"), renamed)
     assert not calibrate.same_svg(renamed.replace('x="1"', 'x="2"'), renamed)
+
+
+def test_svg_tolerance_covers_drawn_geometry_but_not_text_or_styles():
+    committed = ('<text x="101.122323" y="240.131046" transform="rotate(-0 101.122323 240.131046)" '
+                 'style="font-size: 9px; stroke-width: 0.8">79.3%</text><!-- 79.3% -->')
+    for old, new in (('x="101.122323"', 'x="101.122324"'),
+                     ("rotate(-0 101.122323", "rotate(-0 101.122324")):
+        assert calibrate.same_svg(committed.replace(old, new, 1), committed)
+    for old, new in ((">79.3%<", ">79.30001%<"), ("<!-- 79.3% -->", "<!-- 79.30001% -->"),
+                     ("9px", "9.000001px"), ("0.8", "0.8000001")):
+        assert not calibrate.same_svg(committed.replace(old, new), committed), new
+
+
+def test_committed_figure_rejects_a_tiny_change_in_its_text():
+    committed = (calibrate.ROOT / calibrate.FIGURE).read_text()
+    assert calibrate.same_svg(committed, committed)
+    label = re.search(r"<text[^>]*>[^<]*\d(?=</text>)", committed)
+    tampered = committed[:label.end()] + "00001" + committed[label.end():]
+    assert calibrate.svg_difference(tampered, committed).startswith("text at")

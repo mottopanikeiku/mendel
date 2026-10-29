@@ -121,6 +121,27 @@ def test_variance_scaling_does_not_overflow_or_underflow(scale):
         reference_power(0.5, 1.0, 2.0, 20), rel=2e-12
     )
     assert plan_seeds(effect, scale, 2.0 * scale) == plan_seeds(0.5, 1.0, 2.0)
+    assert plan_seeds_with_pilot_uncertainty(effect, scale, 2.0 * scale, 8) == (
+        plan_seeds_with_pilot_uncertainty(0.5, 1.0, 2.0, 8))
+
+
+@pytest.mark.parametrize("effect,variance_a,variance_b", [
+    (1e-100, 1e300, 1e300), (1e-300, 1e300, 1e-300), (1.0, 1e308, 1.5e308), (1e300, 1e-300, 0.0)])
+def test_noncentral_t_planner_handles_extreme_finite_inputs(effect, variance_a, variance_b):
+    n = plan_seeds_with_pilot_uncertainty(effect, variance_a, variance_b, 8)
+    assert type(n) is int and n >= plan_seeds(effect, variance_a, variance_b)
+    if n > 2:
+        # Beyond float range the planned Welch df is infinite, so the rule reduces to
+        # n >= (q / d)^2 with q the 80% quantile of a noncentral t whose
+        # noncentrality is the normal critical value.
+        share = variance_a / max(variance_a, variance_b)
+        share /= share + variance_b / max(variance_a, variance_b)
+        factor = 1 / (share**2 + (1 - share) ** 2)
+        quantile = nct.ppf(0.8, 7 * factor, norm.isf(0.025))
+        log_d = math.log(effect) - 0.5 * (math.log(max(variance_a, variance_b))
+                                          + math.log(1 + min(variance_a, variance_b)
+                                                     / max(variance_a, variance_b)))
+        assert math.log(n) == pytest.approx(2 * (math.log(quantile) - log_d), rel=1e-10)
 
 
 def test_unplannable_inputs_and_deterministic_power_limits():

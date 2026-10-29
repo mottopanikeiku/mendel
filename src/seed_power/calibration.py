@@ -42,6 +42,9 @@ RULES = ("observed_gap", "fixed_effect", "variance_ucl", "variance_nct", "known_
 PILOT_RULES = RULES[:-1]
 PILOT_SIZES = (8, 16, 32, 64)
 TRUTHS = (("null", 0.0), ("half", 0.5), ("meaningful", 1.0))
+# Quadrature nodes for the exact Gaussian references. calibrate.py reports each
+# reference's numerical error as its change when this doubles.
+NODES = 48
 UNDEFINED, PLANNED, OVER_CAP = 0, 1, 2
 
 
@@ -306,9 +309,10 @@ def welch_rejections(mean_a, variance_a, mean_b, variance_b, n, alpha=ALPHA):
     return np.where(both_constant, gap != 0, pvalue < alpha), gap
 
 
-# Exact Gaussian references: deterministic quadrature, no Monte Carlo error.
+# Exact Gaussian references: deterministic quadrature, no Monte Carlo error but a
+# small numerical error, which calibrate.py reports separately.
 
-def chi2_nodes(df, nodes=48):
+def chi2_nodes(df, nodes=NODES):
     """Chi-square quadrature: probabilists' Gauss-Hermite nodes mapped through probits.
 
     A chi-square variable is F^-1(Phi(Z)) for standard normal Z, so smooth
@@ -320,7 +324,7 @@ def chi2_nodes(df, nodes=48):
     return values, w / math.sqrt(2.0 * math.pi)
 
 
-def exact_welch(gap, variance_a, variance_b, n, alpha=ALPHA, nodes=48, pooled=False):
+def exact_welch(gap, variance_a, variance_b, n, alpha=ALPHA, nodes=NODES, pooled=False):
     """Exact two-sided Welch rejection and wrong-sign probabilities for Gaussian arms.
 
     Sample means and variances are independent: the gap is normal and each
@@ -330,21 +334,31 @@ def exact_welch(gap, variance_a, variance_b, n, alpha=ALPHA, nodes=48, pooled=Fa
     pooled-t critical value with 2n-2 df, whose exact power is noncentral t.
     """
     q, w = chi2_nodes(n - 1, nodes)
-    q = q / (n - 1)
+    # With many nodes, the outermost chi-square quantiles underflow to 0 or overflow.
+    # Their total weight is negligible, and they would make the Welch df 0/0.
+    representable = (q > 0) & np.isfinite(q)
+    if w[~representable].sum() > 1e-15:
+        raise FloatingPointError("dropped quadrature nodes carry non-negligible weight")
+    q, w = q[representable] / (n - 1), w[representable]
     sample_a, sample_b = np.meshgrid(variance_a * q, variance_b * q, indexing="ij")
     weight = np.outer(w, w)
     se = np.sqrt((sample_a + sample_b) / n)
-    df = 2.0 * n - 2.0 if pooled else (n - 1) * (sample_a + sample_b) ** 2 / (
-        sample_a**2 + sample_b**2)
+    # Normalize before squaring so tiny sampled variances do not underflow to 0/0.
+    largest = np.maximum(sample_a, sample_b)
+    ratio_a, ratio_b = sample_a / largest, sample_b / largest
+    df = 2.0 * n - 2.0 if pooled else (n - 1) * (ratio_a + ratio_b) ** 2 / (
+        ratio_a**2 + ratio_b**2)
     threshold = t.isf(alpha / 2.0, df) * se
     spread = math.sqrt((variance_a + variance_b) / n)
     upper = float((weight * norm.sf((threshold - gap) / spread)).sum())
     lower = float((weight * norm.cdf((-threshold - gap) / spread)).sum())
+    if not math.isfinite(upper + lower):
+        raise FloatingPointError("Welch quadrature produced a non-finite probability")
     wrong = None if gap == 0 else (lower if gap > 0 else upper)
     return upper + lower, wrong
 
 
-def exact_welch_table(gap, variance_a, variance_b, cap=CAP, alpha=ALPHA, nodes=48):
+def exact_welch_table(gap, variance_a, variance_b, cap=CAP, alpha=ALPHA, nodes=NODES):
     """Exact (rejection, wrong-sign) arrays indexed by n = 0..cap; n < 2 are unused."""
     rejection, wrong = np.zeros(cap + 1), np.zeros(cap + 1)
     for n in range(2, cap + 1):
@@ -398,7 +412,7 @@ def _thresholds(rule, pilot, nodes, cap, alpha=ALPHA, target=TARGET):
     raise ValueError(f"no threshold form for {rule}")
 
 
-def exact_plan_distribution(rule, pilot, sd, effect, truth, cap=CAP, nodes=48):
+def exact_plan_distribution(rule, pilot, sd, effect, truth, cap=CAP, nodes=NODES):
     """P(plan = n) for n = 0..cap and P(over cap), equal-variance Gaussian arms.
 
     With equal true variances, the pooled pilot variance (2m df, m = pilot-1)
