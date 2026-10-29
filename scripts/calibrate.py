@@ -743,10 +743,19 @@ def same_svg(fresh, committed):
     coordinate digit can still differ between x86-64 and arm64, so every
     number in the SVG may differ by a relative 1e-6 and everything else must match.
     """
-    if NUMBER.split(fresh) != NUMBER.split(committed):
-        return False
-    pairs = zip(NUMBER.findall(fresh), NUMBER.findall(committed), strict=True)
-    return all(math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-6) for a, b in pairs)
+    return svg_difference(fresh, committed) is None
+
+
+def svg_difference(fresh, committed):
+    """None if same_svg holds, otherwise the first differing text or number."""
+    texts = NUMBER.split(fresh), NUMBER.split(committed)
+    if texts[0] != texts[1]:
+        index = next((i for i, (a, b) in enumerate(zip(*texts)) if a != b), min(map(len, texts)))
+        return f"text {index}: {texts[0][index:index + 2]!r} vs {texts[1][index:index + 2]!r}"
+    for a, b in zip(NUMBER.findall(fresh), NUMBER.findall(committed), strict=True):
+        if not math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-6):
+            return f"number {a} vs {b}"
+    return None
 
 
 def check(root, output, figure):
@@ -772,7 +781,8 @@ def check(root, output, figure):
     with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / figure.name
         make_figure(result["workflow"], regenerated)
-        assert same_svg(regenerated.read_text(), figure.read_text()), f"{figure} is stale"
+        difference = svg_difference(regenerated.read_text(), figure.read_text())
+        assert difference is None, f"{figure} is stale: {difference}"
     check_claims(result)
     print(f"Regenerated {', '.join(f'{name}.csv' for name in TABLES)}, configuration.json, "
           "report.md and the figure; all match and every checked claim holds.")
