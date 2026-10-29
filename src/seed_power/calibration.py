@@ -65,35 +65,51 @@ class Normal:
 
 @dataclass(frozen=True, eq=False)
 class Grid:
-    """Scores on a finite support; multinomial counts give exact sample moments."""
+    """Scores j/GRID_DENOMINATOR on a finite grid; multinomial counts give exact moments."""
 
     support: np.ndarray
     pmf: np.ndarray
 
     def __post_init__(self):
+        points = self.support * GRID_DENOMINATOR
         if (self.support.shape != self.pmf.shape or self.pmf.min() < 0
+                or not np.allclose(points, np.rint(points), rtol=0, atol=1e-9)
                 or not math.isclose(float(self.pmf.sum()), 1.0, rel_tol=0, abs_tol=1e-12)):
-            raise ValueError("grid needs one nonnegative probability per support point")
+            raise ValueError("grid needs probabilities on multiples of 1/GRID_DENOMINATOR")
+
+    @property
+    def points(self) -> np.ndarray:
+        return np.rint(self.support * GRID_DENOMINATOR).astype(np.int64)
 
     @property
     def mean(self) -> float:
-        return float(self.pmf @ self.support)
+        return float(np.sum(self.pmf * self.support))
 
     @property
     def variance(self) -> float:
-        return float(self.pmf @ (self.support - self.mean) ** 2)
+        return float(np.sum(self.pmf * (self.support - self.mean) ** 2))
 
     @property
     def sd(self) -> float:
         return math.sqrt(self.variance)
 
     def sample_moments(self, rng, n):
-        n = np.asarray(n, dtype=np.int64)
-        counts = rng.multinomial(n, self.pmf)
-        means = counts @ self.support / n
-        variances = (counts * (self.support - means[:, None]) ** 2).sum(axis=1) / (n - 1)
-        # Constant samples have exactly zero variance, matching stats.welch_test.
-        variances[(counts > 0).sum(axis=1) == 1] = 0.0
+        return self.moments(rng.multinomial(np.asarray(n, dtype=np.int64), self.pmf))
+
+    def moments(self, counts):
+        """Sample means and unbiased variances from integer counts, each rounded once.
+
+        Integer sums make equal samples give bitwise-equal means on every
+        platform, so an exactly zero pilot gap or a constant sample never
+        depends on floating-point summation order (BLAS dot products differ
+        between x86-64 and arm64). Constant samples get exactly zero variance.
+        """
+        counts = np.asarray(counts, dtype=np.int64)
+        n = counts.sum(axis=1)
+        total = counts @ self.points
+        squares = counts @ (self.points * self.points)
+        means = total / (n * GRID_DENOMINATOR)
+        variances = (n * squares - total * total) / (n * (n - 1) * GRID_DENOMINATOR**2)
         return means, variances
 
 
@@ -104,7 +120,8 @@ def mixture(first: Grid, second: Grid, weight: float) -> Grid:
     return Grid(first.support, (1 - weight) * first.pmf + weight * second.pmf)
 
 
-SUPPORT = np.linspace(0.0, 1.0, 101)
+GRID_DENOMINATOR = 100
+SUPPORT = np.arange(GRID_DENOMINATOR + 1) / GRID_DENOMINATOR
 
 
 def _normalized(weights):
@@ -432,12 +449,15 @@ def stream(root, key):
     return np.random.default_rng(np.random.SeedSequence(root, spawn_key=tuple(key)))
 
 
-def simulate(arm_a, arm_b, effect, pilot, outer, inner, root, key, exact=None):
+def simulate(arm_a, arm_b, effect, pilot, outer, inner, root, key, exact=None,
+             null=False):
     """Simulate every rule on shared pilots; confirmation streams differ by rule.
 
     Spawn key ``key + (0,)`` draws pilots and ``key + (1 + i,)`` confirms rule i.
     Each pilot gets ``inner`` independent confirmations of its planned count.
-    ``exact`` optionally maps n to exact Gaussian rejection probabilities.
+    ``exact`` optionally maps n to exact Gaussian rejection probabilities. A
+    declared ``null`` has no direction, so wrong-sign fields stay empty even
+    when the two means differ by rounding.
     """
     pilot_rng = stream(root, (*key, 0))
     sizes = np.full(outer, pilot)
@@ -464,7 +484,7 @@ def simulate(arm_a, arm_b, effect, pilot, outer, inner, root, key, exact=None):
             cb, vb = arm_b.sample_moments(rng, repeated)
             reject, gap = welch_rejections(ca, va, cb, vb, repeated)
             rejected[executed] = reject.reshape(-1, inner).mean(axis=1)
-            if truth != 0:
+            if not null:
                 opposite = reject & (np.sign(gap) != np.sign(truth))
                 wrong[executed] = opposite.reshape(-1, inner).mean(axis=1)
         cost = 2 * pilot + 2 * seeds
@@ -483,8 +503,8 @@ def simulate(arm_a, arm_b, effect, pilot, outer, inner, root, key, exact=None):
             "eligibility": eligibility, "eligibility_mc_se": eligibility_se,
             "workflow_rate": rate, "workflow_mc_se": rate_se,
             "conditional_rate": conditional, "conditional_mc_se": conditional_se,
-            "wrong_sign_rate": wrong_rate if truth != 0 else None,
-            "wrong_sign_mc_se": wrong_se if truth != 0 else None,
+            "wrong_sign_rate": None if null else wrong_rate,
+            "wrong_sign_mc_se": None if null else wrong_se,
             "mean_total_seeds": mean_cost, "mean_total_seeds_mc_se": cost_se,
             "executed_seeds_q25": quartiles[0], "executed_seeds_median": quartiles[1],
             "executed_seeds_q75": quartiles[2],

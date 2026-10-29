@@ -118,7 +118,7 @@ Each task/variant pool of committed pilot and confirmation roots is split 4 time
 | Acrobot-v1 | base vs no_entropy | -3.4 | 8 | 3.1% ± 0.5 (72.2% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) |
 | Acrobot-v1 | base vs no_entropy | -3.4 | 32 | 2.2% ± 1.1 (48.4% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) |
 
-Each cell is workflow rejection ± a 95% half-width, then the fraction of plans run. Gaps are mean(a) − mean(b) averaged over the half populations. Variant pairs are planned at each half population's own gap, which moves with finite-pool noise. Near the 512-seed cap that decides whether a plan runs at all, so those rows carry large finite-pool errors, and rules that inflate the variance push more plans over the cap. The fixed-effect rules ran under 1% of plans for CartPole-v1 base vs no_entropy, Acrobot-v1 base vs lr_slow, Acrobot-v1 base vs no_entropy: their gaps need far more than 512 seeds per arm.
+Each cell is workflow rejection ± a 95% half-width, then the fraction of plans run. Gaps are mean(a) − mean(b) averaged over the half populations. Variant pairs are planned at each half population's own gap, which moves with finite-pool noise. Near the 512-seed cap that decides whether a plan runs at all, so those rows carry large finite-pool errors, and rules that inflate the variance push more plans over the cap. The fixed-effect rules ran under 1% of plans for CartPole-v1 base vs no_entropy, Acrobot-v1 base vs lr_slow, Acrobot-v1 base vs no_entropy: under the noncentral-t planning model, the finite-population gaps of these pairs need far more than 512 seeds per arm.
 
 ## Fresh training versus resampling
 

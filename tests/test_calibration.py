@@ -1,5 +1,7 @@
 """Known-truth calibration: planners, exact references, samplers and resampling draws."""
 
+from fractions import Fraction
+
 import math
 
 import numpy as np
@@ -246,3 +248,39 @@ def test_recommendation_is_the_cheapest_rule_that_holds_everywhere():
                              "variance_nct": (0.7, 170), "variance_ucl": (0.75, 230)})
     recommendation = calibrate.recommend(rows)
     assert (recommendation["rule"], recommendation["holds_everywhere"]) == ("variance_ucl", False)
+
+
+def test_grid_moments_are_exact_rationals_rounded_once():
+    rng = np.random.default_rng(12)
+    counts = rng.multinomial(np.full(50, 16), sim.CEILING_CONTROL.pmf)
+    means, variances = sim.CEILING_CONTROL.moments(counts)
+    points = sim.CEILING_CONTROL.points
+    for row, mean, variance in zip(counts, means, variances):
+        values = [Fraction(int(j), 100) for j, c in zip(points, row) for _ in range(int(c))]
+        exact_mean = sum(values) / len(values)
+        exact_variance = sum((v - exact_mean) ** 2 for v in values) / (len(values) - 1)
+        assert mean == float(exact_mean) and variance == float(exact_variance)
+
+
+def test_bounded_null_pilot_ties_are_exact_zero_gaps_on_every_platform():
+    # workflow.csv row 125: bounded null, 16-seed pilots. A float dot product found 8
+    # zero gaps on x86-64 and 7 on arm64; integer counts find all 12.
+    index, (family, label, arm_a, arm_b, _) = 6, list(sim.scenarios())[6]
+    assert (family, label) == ("bounded", "null")
+    rng = sim.stream(calibrate.SEED, (0, index, 1, 0))
+    sizes = np.full(2000, 16)
+    mean_a, var_a = arm_a.sample_moments(rng, sizes)
+    mean_b, var_b = arm_b.sample_moments(rng, sizes)
+    ties = np.flatnonzero(mean_a - mean_b == 0)
+    assert ties.size == 12 and {591, 953, 1427, 1685} <= set(ties.tolist())
+    _, status = sim.plan("observed_gap", mean_a - mean_b, var_a, var_b, 16)
+    assert (status == sim.UNDEFINED).sum() == 12
+
+
+def test_declared_nulls_report_no_wrong_sign_errors():
+    # The shape null has equal means only to rounding; a rounding-sized gap is not a direction.
+    family, label, arm_a, arm_b, effect = list(sim.scenarios())[-1]
+    assert (family, label) == (sim.SHAPE_NULL, "null")
+    assert abs(arm_a.mean - arm_b.mean) < 1e-12
+    for row in sim.simulate(arm_a, arm_b, effect, 8, 300, 2, 11, (9, 8), null=True):
+        assert row["wrong_sign_rate"] is None and row["wrong_sign_mc_se"] is None

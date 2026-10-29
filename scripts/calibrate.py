@@ -98,8 +98,8 @@ def reference_rows(trials):
                 "seeds_per_arm": n, "trials": trials, "mc_rate": rate,
                 "mc_se": math.sqrt(rate * (1 - rate) / trials),
                 "mc_wrong_sign": (float((reject & (np.sign(gap) != np.sign(truth))).mean())
-                                  if truth != 0 else None),
-                "noncentral_t_formula": formula if truth != 0 else sim.ALPHA,
+                                  if label != "null" else None),
+                "noncentral_t_formula": formula if label != "null" else sim.ALPHA,
                 "exact_rate": exact, "exact_wrong_sign": wrong,
             })
     return rows
@@ -117,7 +117,8 @@ def workflow_rows(outer, inner):
         equal = exact is not None and arm_a.sd == arm_b.sd
         for pilot_index, pilot in enumerate(sim.PILOT_SIZES):
             simulated = sim.simulate(arm_a, arm_b, effect, pilot, outer, inner, SEED,
-                                     (0, index, pilot_index), exact)
+                                     (0, index, pilot_index), exact,
+                                     null=label == "null")
             for row in simulated:
                 extra = {"exact_workflow_rate": None, "exact_eligibility": None,
                          "exact_mean_total_seeds": None, "exact_wrong_sign_rate": None}
@@ -133,7 +134,8 @@ def workflow_rows(outer, inner):
                         "exact_workflow_rate": float(pmf @ rejection),
                         "exact_eligibility": float(pmf.sum()),
                         "exact_mean_total_seeds": float(2 * pilot + 2 * pmf @ np.arange(pmf.size)),
-                        "exact_wrong_sign_rate": float(pmf @ wrong) if truth != 0 else None,
+                        "exact_wrong_sign_rate": (float(pmf @ wrong) if label != "null"
+                                                  else None),
                     }
                 rows.append({"population": family, "truth_label": label, "truth_effect": truth,
                              "meaningful_effect": effect, "pilot_seeds": pilot, **row, **extra})
@@ -445,7 +447,7 @@ def render_report(configuration, reference, workflow, resampling, recommendation
     worst_fixed = max(abs(row["mc_rate"] - row["exact_rate"]) / math.sqrt(
         row["exact_rate"] * (1 - row["exact_rate"]) / row["trials"]) for row in fixed)
     gaps = {small: max(abs(row["noncentral_t_formula"] - row["exact_rate"]) for row in fixed
-                       if row["truth_effect"] != 0 and (row["seeds_per_arm"] < 8) == small)
+                       if row["truth_label"] != "null" and (row["seeds_per_arm"] < 8) == small)
             for small in (True, False)}
     lines += [
         "For equal-variance Gaussian arms I compute every rule's plan distribution, power, "
@@ -502,7 +504,8 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         f"the {sim.CAP}-seed cap that decides whether a plan runs at all, so those rows carry "
         "large finite-pool errors, and rules that inflate the variance push more plans over "
         "the cap. The fixed-effect rules ran under 1% of plans for "
-        f"{', '.join(rare)}: their gaps need far more than {sim.CAP} seeds per arm.",
+        f"{', '.join(rare)}: under the noncentral-t planning model, the finite-population "
+        f"gaps of these pairs need far more than {sim.CAP} seeds per arm.",
         "",
         "## Fresh training versus resampling",
         "",
