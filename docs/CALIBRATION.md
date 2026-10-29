@@ -12,7 +12,7 @@ OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 uv run python scripts/calibrate.py
 uv run python scripts/calibrate.py --check
 ```
 
-The first command needs no training, downloads or cloud compute. It writes `results/calibration/{configuration.json,reference.csv,workflow.csv,resampling.csv,report.md}` and `figures/known_truth.svg`. The second regenerates everything in memory, compares it with the committed files (floats to a relative 1e-12, everything else exactly, the report byte for byte, and the SVG with every other character identical and drawn coordinates within a relative 1e-6, because matplotlib's last coordinate digit and its hashed clip-path ids differ between x86-64 and arm64; ids are renumbered before comparing), checks that the README table matches, and checks the claims listed under [checks](#what---check-asserts). CI runs it on x86-64 and arm64. The root seed is 20261029; `configuration.json` records the NumPy PCG64 spawn-key recipe for every stream. I make no timing claims.
+The first command needs no training, downloads or cloud compute. It writes `results/calibration/{configuration.json,reference.csv,workflow.csv,resampling.csv,report.md}` and `figures/known_truth.svg`. The second regenerates everything in memory, compares it with the committed files (floats to a relative 1e-12, except the `*_numerical_error` columns, which are differences of nearly equal floats and are compared to an absolute 1e-10; everything else exactly, the report byte for byte, and the SVG with numbers in drawn-geometry attributes (path data, positions, sizes, transforms and the view box) within a relative 1e-6 and all text, styles and other characters identical, because matplotlib's last coordinate digit and its hashed clip-path ids differ between x86-64 and arm64; ids are renumbered before comparing), checks that the README table matches, and checks the claims listed under [checks](#what---check-asserts). CI runs it on x86-64 and arm64. The root seed is 20261029; `configuration.json` records the NumPy PCG64 spawn-key recipe for every stream. I make no timing claims.
 
 ## The study each rule plans
 
@@ -46,7 +46,7 @@ Sampling is exact. For Gaussian arms I draw each sample mean and variance from t
 
 ## Exact references
 
-For Gaussian arms I compute exact Welch rejection and wrong-sign probabilities at any n. The sample gap is normal and independent of the two sample variances, so I integrate the conditional normal rejection probability over both chi-square variances, including the data-dependent Welch degrees of freedom. Probabilists' Gauss–Hermite nodes mapped through probits converge spectrally. With the pooled-t critical value, the same quadrature reproduces noncentral-t power to 1e-7 at n = 2 and to rounding error from n = 5.
+For Gaussian arms I compute exact Welch rejection and wrong-sign probabilities at any n. The sample gap is normal and independent of the two sample variances, so I integrate the conditional normal rejection probability over both chi-square variances, including the data-dependent Welch degrees of freedom. I use 48 probabilists' Gauss–Hermite nodes mapped through probits. From 3 seeds per arm the quadrature error is below 1e-9. At 2 seeds per arm each sample variance has one degree of freedom, convergence is slower, and the error reaches 3.3e-5. I report this numerical error separately from Monte Carlo error, as each exact value's change when the nodes double to 96, and tests check that this estimate bounds the error against an independent adaptive integration. With the pooled-t critical value, the same quadrature reproduces noncentral-t power to 1e-7 at n = 2 and to rounding error from n = 5.
 
 For equal-variance Gaussian arms I also compute each rule's whole plan distribution exactly. A plan depends on the pilot only through d = effect/√(s²_a + s²_b) and the variance share r = s²_a/(s²_a + s²_b). With equal true variances, r is Beta((pilot − 1)/2, (pilot − 1)/2) and independent of the summed variance and the pilot gap. A plan is at most n exactly when d reaches a threshold that depends on n and r. For a fixed effect that event is a chi-square CDF. For the observed gap, √pilot·d is the absolute pooled t statistic, which is noncentral t. Gauss–Jacobi nodes integrate r. Combining plan probabilities with exact Welch power gives exact workflow power, eligibility, mean cost and wrong-sign rate with no Monte Carlo error.
 
@@ -64,13 +64,13 @@ The spread of a rate across the eight half populations, minus its Monte Carlo no
 
 ## How the recommendation is chosen
 
-Code chooses the rule from the SIM tables only. A rule holds at a pilot size if its power at the meaningful effect is at least 78% (80% minus a 2-point tolerance) in all four SIM populations. Among rules that hold at every pilot size, the one with the lowest mean total seed cost is recommended. If none holds everywhere, the report names the rule with the best worst case and says so. The resampling results do not feed into the choice.
+Code chooses the rule from the SIM tables only. A rule holds at a pilot size if its power at the meaningful effect is at least 78% (80% minus a 2-point tolerance) in all four SIM populations. Among rules that hold at every pilot size, the one with the lowest mean total seed cost is recommended. If none holds everywhere, the report names the rule with the best worst case and says so. The resampling results do not feed into the choice. "Holds" classifies simulated point estimates, each with Monte Carlo error. It does not show that a rule's true power is at least 78%, and the report lists the calls that fall within a 95% Monte Carlo half-width of the line.
 
 ## What `--check` asserts
 
-- Fixed-count Monte Carlo rejection rates are within 4.5 binomial SEs of exact Gaussian Welch power.
-- For equal-variance Gaussian cells, simulated workflow power, eligibility and mean cost are within 4.5 SEs of their exact values.
-- For all Gaussian cells, simulated power is within 4.5 SEs of the exact power of each pilot's own plan.
+- Fixed-count Monte Carlo rejection rates are within 4.5 binomial SEs, plus the exact value's numerical error, of exact Gaussian Welch power.
+- For equal-variance Gaussian cells, simulated workflow power, eligibility and mean cost are within 4.5 SEs, plus numerical error, of their exact values.
+- For all Gaussian cells, simulated power is within 4.5 SEs, plus numerical error, of the exact power of each pilot's own plan.
 - Every pilot and every resampling replicate is accounted for as undefined, over the cap, pool-limited or run.
 - The README's calibration table matches the report, and every percentage the README quotes on a line about the simulation or resampling appears in the report.
 

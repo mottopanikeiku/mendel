@@ -186,17 +186,28 @@ def plan_seeds_with_pilot_uncertainty(
     pilot_seeds = _integer(pilot_seeds, "pilot_seeds", 2)
     if effect == 0.0 or max(variance_a, variance_b) == 0.0:
         return None
-    total = variance_a + variance_b
-    if not math.isfinite(total):
-        raise ValueError("variance_a + variance_b must be a finite float")
-    standardized = effect / math.sqrt(total)
-    share = variance_a / total
+    # Normalize before squaring and work with log noncentrality, as _power does:
+    # extreme scales then neither overflow nor underflow, and counts beyond
+    # float range stay exact Python integers.
+    scale = max(variance_a, variance_b)
+    a, b = variance_a / scale, variance_b / scale
+    share = a / (a + b)
     factor = 1.0 / (share * share + (1.0 - share) ** 2)
     pilot_df = (pilot_seeds - 1.0) * factor
+    log_standardized = math.log(effect) - 0.5 * (math.log(scale) + math.log(a + b))
 
     def enough(n):
-        critical = t.isf(alpha / 2.0, (n - 1.0) * factor)
-        return nct.cdf(standardized * math.sqrt(n), pilot_df, critical) >= target
+        # Julious-Owen evaluate a noncentral t (noncentrality = critical value) at d*sqrt(n).
+        log_point = log_standardized + 0.5 * math.log(n)
+        if log_point > math.log(np.finfo(float).max):
+            return True
+        try:
+            df = float(n - 1) * factor
+        except OverflowError:
+            df = math.inf
+        # The infinite-df t limit, only beyond float representability.
+        critical = norm.isf(alpha / 2.0) if math.isinf(df) else t.isf(alpha / 2.0, df)
+        return nct.cdf(math.exp(log_point), pilot_df, critical) >= target
 
     if enough(2):
         return 2
