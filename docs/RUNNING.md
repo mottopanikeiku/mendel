@@ -13,11 +13,15 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/neural_analyze.py
 uv run python scripts/neural_figures.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/calibrate.py
 uv run python scripts/calibrate.py --check
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/null_diagnostics.py
+uv run python scripts/null_diagnostics.py --check
 uv run ruff check .
 uv run python -m pytest -q
 ```
 
 `scripts/calibrate.py` is the known-truth planning calibration ([method](CALIBRATION.md)). It simulates known populations and resamples the committed PPO roots, so it needs no training. It is seeded and writes the same tables on x86-64 and arm64; `--check` compares a fresh regeneration with the committed files, floats to a relative 1e-12, and fails if the README calibration table or its quoted numbers no longer match the report.
+
+`scripts/null_diagnostics.py` looks for the cause of the neural null-control rejections ([report](../results/neural/null_diagnostics.md)). It reruns five tests on every executed cell, resamples held-out committed base roots to estimate each test's size at the planned counts, and checks training batches, arms, phases and seed blocks. It trains nothing. `--check` regenerates the JSON, report and figure, compares them with the committed files (floats to a relative 1e-12, figure coordinates as for the calibration), checks the report's qualitative claims, and fails if a decimal or fraction quoted next to a link to the report in the README or neural protocol is not in the report.
 
 The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
 

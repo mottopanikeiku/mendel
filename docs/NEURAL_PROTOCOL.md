@@ -24,6 +24,8 @@ I report independent two-sided Welch detections (`p < 0.05`) for every executabl
 
 Same-variant controls rejected in **7/74 tests (9.5%; 4.7–18.3%)**; CartPole alone rejected in **5/36 (13.9%; 6.1–28.7%)**. I do not claim exact 5% calibration. All 381 completed tests used ordinary Welch calculations, with no constant-group conventions triggered.
 
+After the confirmation, I looked for an explanation of the CartPole excess ([null-control diagnostics](../results/neural/null_diagnostics.md)). Student, permutation, Mann-Whitney and Yuen tests reject 5, 6, 5 and 3 of the 36 controls. Drawing both arms from held-out base roots at each planned count, Welch should reject 1.80 of them, and 5 or more then has probability 0.033. No difference between training batches, arms or phases was detected by these checks, which cannot rule out small differences. A small shift shared by the seeds of each arm would fit the over-dispersion, but base blocks outside the controls give permutation p = 0.060, so I can neither confirm nor rule that out. Adjusted only for the two tasks, the CartPole tail is 0.065 at exact 5% size. These diagnostics did not identify an explanation, and I chose them after seeing the excess.
+
 ## What the comparison can and cannot say
 
 The neural and affine tables are separate experiments. Optimizers, horizons, evaluation reset handling, numerical precision and cohort composition differ, so a difference between their detection rates is not a causal effect of using neural policies. The new result removes the affine-only limitation, but two classic-control tasks are still not a general deep-RL benchmark.

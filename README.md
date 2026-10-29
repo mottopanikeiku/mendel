@@ -30,6 +30,8 @@ I planned neural PPO comparisons for **80% modeled power** from eight-seed pilot
 
 Same-variant controls rejected in **7/74 tests (9.5%; 4.7–18.3%)**.
 
+CartPole-v1 rejected 5/36 of its controls, and my diagnostics did not identify an explanation. Four other tests reject 3 to 6 of the 36. Resampling held-out base roots at the planned counts, Welch should reject only 1.80. No difference between training batches, arms or phases was detected by these checks. Adjusted only for the two tasks, 5 or more rejections is a 0.065 event at exact 5% size ([null-control diagnostics](results/neural/null_diagnostics.md)).
+
 These rates mix comparisons whose true gaps differ, and some variants may have almost no true gap, so they are not power at a known effect. The simulation above is what separates the planning rule from the comparisons.
 
 ![Pilot-derived budgets: affine policy search and neural PPO](figures/neural_vs_linear.png)
@@ -67,20 +69,21 @@ Recompute from committed scores without training or paid compute:
 
 ```sh
 uv run python scripts/calibrate.py
+uv run python scripts/null_diagnostics.py
 uv run python scripts/neural_analyze.py confirmation
 uv run python scripts/neural_figures.py
 uv run python scripts/analyze.py confirmation
 uv run python scripts/public_analysis.py
 ```
 
-`uv run python scripts/calibrate.py --check` regenerates the calibration and compares it with the committed files; CI runs it on x86-64 and arm64. [Cloud reproduction and tests](docs/RUNNING.md).
+`uv run python scripts/calibrate.py --check` regenerates the calibration and compares it with the committed files; `scripts/null_diagnostics.py --check` does the same for the null-control diagnostics. CI runs both on x86-64 and arm64. [Cloud reproduction and tests](docs/RUNNING.md).
 
 ## Limits
 
 - The calibration is a simulation of four stylized populations with one effect size, plus resampling of committed roots. Resampling reuses the same roots, conditions on the fixed evaluation resets and is not a prospective test of the recommended rule on newly trained seeds.
 - Every fixed-effect rule needs an effect chosen in advance. If the true effect is only half of it, simulated power falls to 28.4–41.3%.
 - These are detection frequencies in two fixed classic-control designs, not true power at known effects or a general deep-RL benchmark. I did not run **93/400** different-variant plans above the **512-seed-per-arm** limit.
-- The noncentral-t planner uses noisy pilot gaps and variances with fixed Welch degrees of freedom. Bounded, skewed returns may not fit its model, and different variants may have no true mean gap. I cannot attribute every missed detection to pilot noise or claim exact 5% calibration.
+- The noncentral-t planner uses noisy pilot gaps and variances with fixed Welch degrees of freedom. Bounded, skewed returns may not fit its model, and different variants may have no true mean gap. I cannot attribute every missed detection to pilot noise or claim exact 5% calibration. The CartPole null controls rejected 5/36, and my [diagnostics](results/neural/null_diagnostics.md) did not identify an explanation.
 - Episodes measure each trained policy; they are not independent training replicates. Inference is conditional on the fixed reset sets and executable plans.
 - The affine and neural experiments differ in optimizers, horizons, budgets, reset handling, precision and comparison mix. Their rate difference is not a causal effect of neural policies.
 
