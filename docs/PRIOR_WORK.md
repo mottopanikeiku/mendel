@@ -12,13 +12,13 @@ Seed-count planning in RL is not new. I add a small **prospective calibration te
 
 [Evaluation-Aware Reinforcement Learning (2025)](https://arxiv.org/abs/2509.19464) concerns training for more accurate policy evaluation, a different objective. A literature search cannot prove that prospective seed-budget calibration has never been studied. I claim an executable small replication and extension, not priority for a statistical idea.
 
-I follow [eval-power](https://github.com/mottopanikeiku/eval-power)'s separation of historical calculations and new measurements. I adapt affine ARS/CEM and Gymnasium batches from [control-clock](https://github.com/mottopanikeiku/control-clock/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), MIT. [Environment notices](ENVIRONMENTS.md) retain Gymnasium MIT and Acrobot/RLPy BSD terms. These short-budget affine policies do not establish seed requirements for deep RL generally.
+I follow [rayleigh](https://github.com/mottopanikeiku/rayleigh)'s separation of historical calculations and new measurements. I adapt affine ARS/CEM and Gymnasium batches from [coldstart](https://github.com/mottopanikeiku/coldstart/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), MIT. [Environment notices](ENVIRONMENTS.md) retain Gymnasium MIT and Acrobot/RLPy BSD terms. These short-budget affine policies do not establish seed requirements for deep RL generally.
 
 ## Public data and permissions
 
 The rliable Atari 100k route was unavailable on 2026-10-07. Anonymous requests to its [SPR object](https://storage.googleapis.com/rl-benchmark-data/atari_100k/SPR.json) and bucket listings returned HTTP 404; [issue 31](https://github.com/google-research/rliable/issues/31) records an earlier access problem. The code/notebook's Apache-2.0 license does not establish separate bucket-data terms. I import no unavailable Atari scores and make no Atari power claim.
 
-Instead I reanalyse my already-public MIT [Control Clock release](https://github.com/mottopanikeiku/control-clock/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), not an external RL-paper survey. I import every final record linked by its pinned summary: 140 training runs, two tasks and five implementations. ARS, CEM and batched PPO have 20 runs per task; adapted CleanRL PPO and Zoo SB3 PPO have five. The source archive, every raw-record URL and SHA256, selection rule and license are in [public_sources.json](../data/public_sources.json). The importer verifies each last-evaluation score against its 100 raw episode returns.
+Instead I reanalyse my already-public MIT [coldstart release](https://github.com/mottopanikeiku/coldstart/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), not an external RL-paper survey. I import every final record linked by its pinned summary: 140 training runs, two tasks and five implementations. ARS, CEM and batched PPO have 20 runs per task; adapted CleanRL PPO and Zoo SB3 PPO have five. The source archive, every raw-record URL and SHA256, selection rule and license are in [public_sources.json](../data/public_sources.json). The importer verifies each last-evaluation score against its 100 raw episode returns.
 
 Those scores are last-evaluation means at stopping policies, not equal-training-budget outcomes. A shared fixed evaluation set is reused for stopping and evaluation, including qualification at initialization. Bounded, ceiling-heavy and qualification-selected scores make population extrapolation especially weak.
 
@@ -32,7 +32,7 @@ uv run python scripts/public_analysis.py
 ## Neural PPO extension
 
 I extend the same prospective question to small neural policies. I adapt
-[Control Clock's JAX PPO](https://github.com/mottopanikeiku/control-clock/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py)
+[coldstart's JAX PPO](https://github.com/mottopanikeiku/coldstart/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py)
 (MIT), which follows [PureJaxRL](https://github.com/luchris429/purejaxrl)'s
 JAX/vmap/scan design (Apache-2.0; retained notice in `third_party/`).
 I replace qualification stopping with a fixed transition budget and evaluate

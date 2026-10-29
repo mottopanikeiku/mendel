@@ -15,12 +15,12 @@ uv run ruff check .
 uv run python -m pytest -q
 ```
 
-The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB Control Clock archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
+The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
 
 ## Repeat the original fresh-seed confirmation
 
 I committed and pushed the complete pilot and confirmation counts at
-[`3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b`](https://github.com/mottopanikeiku/seed-power/commit/3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b)
+[`3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b`](https://github.com/mottopanikeiku/mendel/commit/3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b)
 before starting confirmation. The runner requires that exact commit and plan; it refuses to overwrite an existing result directory. A repeat uses the same pseudorandom training seeds, so it is a reproducibility check, not new independent statistical evidence.
 
 ```sh
@@ -32,10 +32,12 @@ uv run python scripts/analyze.py confirmation --confirmation results/replication
 
 A Modal account is required only for training. Each container requests one CPU core and 1 GiB RAM; numerical libraries use one thread, with at most eight concurrent containers. The exact cloud environments and per-batch execution durations are in `results/*/environment.json`. Modal's sandbox reports the CPU model as unknown. I report cloud costs conservatively, not laptop training times or a throughput ranking.
 
+I estimate the original cloud compute, including failed attempts, at **$0.0221, rounded up to $0.03**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/cost.json)).
+
 ## Export or reproduce neural PPO confirmation
 
 I pushed the complete neural count plan at
-[`260bebb4b1ab2d827ef06371b3681a0293f2b999`](https://github.com/mottopanikeiku/seed-power/commit/260bebb4b1ab2d827ef06371b3681a0293f2b999)
+[`260bebb4b1ab2d827ef06371b3681a0293f2b999`](https://github.com/mottopanikeiku/mendel/commit/260bebb4b1ab2d827ef06371b3681a0293f2b999)
 before any confirmation results. Transport commit `37e9e46` adds source-versioned, durable, resumable batches without changing the training code, design or count plan. Use a Python 3.12 client:
 
 ```sh
@@ -49,6 +51,8 @@ uv run python scripts/neural_figures.py --neural results/replication/neural/summ
 Each GPU container requests one L4, two CPU cores and 8 GiB RAM; the concurrency limit is one. Roots are vmapped in batches of 64. Every complete batch is committed to the dedicated `seed-power-day-results` Volume before being returned. Existing batches for the same design, count plan, committed training-source tree and immutable runtime image are exported rather than retrained. Five sequential fresh-client attempts share the overall deadline, and rerunning resumes only missing batches. An empty cache trains the same pseudorandom roots again; that is reproducibility, not additional independent evidence. No model weights are downloaded. Per-batch persistence adds substantial cloud wall time; the throughput forecast measures training only, not total export time.
 
 The CPU-only neural correctness tests are optional locally (`uv sync --locked --python 3.12 --extra neural`); CI installs that extra and exercises them. [Neural protocol and limitations](NEURAL_PROTOCOL.md).
+
+I estimate neural cloud compute, including failed attempts, at **$1.1905, rounded up to $1.20**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/neural/cost.json)).
 
 
 ## Run a new pilot and confirmation
