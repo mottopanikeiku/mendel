@@ -291,3 +291,6 @@ def test_svg_comparison_allows_only_tiny_coordinate_differences():
     assert calibrate.same_svg(committed.replace("10.123456", "10.123457"), committed)
     assert not calibrate.same_svg(committed.replace("10.123456", "10.2"), committed)
     assert not calibrate.same_svg(committed.replace("80% target", "81% target"), committed)
+    renamed = '<clipPath id="pabc12345678"><rect x="1"/></clipPath><g clip-path="url(#pabc12345678)"/>'
+    assert calibrate.same_svg(renamed.replace("pabc12345678", "pdef98765432"), renamed)
+    assert not calibrate.same_svg(renamed.replace('x="1"', 'x="2"'), renamed)

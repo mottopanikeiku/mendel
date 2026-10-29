@@ -746,8 +746,22 @@ def same_svg(fresh, committed):
     return svg_difference(fresh, committed) is None
 
 
+CLIP_ID = re.compile(r'(?<=id=")p[0-9a-f]{8,}(?=")|(?<=url\(#)p[0-9a-f]{8,}(?=\))')
+
+
+def canonical_clip_ids(svg):
+    names = {}
+    return CLIP_ID.sub(lambda match: names.setdefault(match.group(), f"clip-{len(names)}"), svg)
+
+
 def svg_difference(fresh, committed):
-    """None if same_svg holds, otherwise the first differing text or number."""
+    """None if same_svg holds, otherwise the first differing text or number.
+
+    Matplotlib names each clip path by hashing its rectangle, so a last-digit
+    layout difference renames it. Ids are renumbered in order of appearance;
+    the rectangles themselves are still compared as numbers.
+    """
+    fresh, committed = canonical_clip_ids(fresh), canonical_clip_ids(committed)
     texts = NUMBER.split(fresh), NUMBER.split(committed)
     if texts[0] != texts[1]:
         index = next((i for i, (a, b) in enumerate(zip(*texts)) if a != b), min(map(len, texts)))
