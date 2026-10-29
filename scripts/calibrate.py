@@ -34,6 +34,8 @@ SEED = 20261029
 SIZES = {"outer": 2000, "inner": 8, "reference_trials": 20000, "splits": 4, "replicates": 500}
 REFERENCE_COUNTS = (2, 3, 5, 8, 16, 32, 64, 128, 256, 512)
 TOLERANCE = 0.02
+# Numerical-error estimates below this are float rounding, which differs between machines.
+NOISE = 1e-10
 DESIGN = "configs/neural_design.json"
 PILOT_RAW = "results/neural/pilot/runs.jsonl.gz"
 CONFIRMATION_RAW = "results/neural/confirmation/runs.jsonl.gz"
@@ -506,6 +508,10 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         "seeds": max(row["exact_mean_total_seeds_numerical_error"] for row in exact_rows),
     }
     smallest_se = min(row["workflow_mc_se"] for row in exact_rows if row["workflow_mc_se"] > 0)
+
+    def rounding(value):
+        return f"below {NOISE:.0e}" if value < NOISE else f"at most {value:.1e}"
+
     lines += [
         "For equal-variance Gaussian arms I compute every rule's plan distribution, power, "
         "eligibility, cost and wrong-sign rate by quadrature, with no Monte Carlo error "
@@ -525,9 +531,9 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         "estimate bounds the error against an independent adaptive integration. For "
         f"fixed-count Welch rejection it is at most {numerical['two']:.1e} at 2 seeds per arm, "
         "where each sample variance has one degree of freedom, and at most "
-        f"{numerical['more']:.1e} from 3 seeds on. For workflow power and eligibility it is at "
-        f"most {numerical['workflow']:.1e}, and for mean total seeds "
-        f"{numerical['seeds']:.1e} seeds. The smallest Monte Carlo SE of workflow power in "
+        f"{numerical['more']:.1e} from 3 seeds on. For workflow power and eligibility it is "
+        f"{rounding(numerical['workflow'])}, and for mean total seeds "
+        f"{rounding(numerical['seeds'])} seeds. The smallest Monte Carlo SE of workflow power in "
         f"those rows is {smallest_se:.4f}. Every check above allows 4.5 Monte Carlo SEs plus "
         "the numerical error.",
         "",
@@ -747,11 +753,11 @@ def write(result, output, figure):
     make_figure(result["workflow"], figure)
 
 
-def same(fresh, committed, where):
+def same(fresh, committed, where, abs_tol=1e-15):
     if fresh == committed:
         return
     try:
-        close = math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=1e-15)
+        close = math.isclose(float(fresh), float(committed), rel_tol=1e-12, abs_tol=abs_tol)
     except ValueError:
         close = False
     if not close:
@@ -877,7 +883,10 @@ def check(root, output, figure):
         for index, (left, right) in enumerate(zip(fresh, committed)):
             assert list(left) == list(right), f"{name}.csv[{index}] columns"
             for key in right:
-                same(left[key], right[key], f"{name}.csv[{index}].{key}")
+                # A numerical-error estimate is a difference of nearly equal floats, so
+                # below 1e-10 it is rounding noise that differs between machines.
+                same(left[key], right[key], f"{name}.csv[{index}].{key}",
+                     NOISE if key.endswith("_numerical_error") else 1e-15)
     assert result["report"] == (output / "report.md").read_text(), "report.md is stale"
     readme = (root / "README.md").read_text()
     assert headline_table(result["workflow"]) in readme, "README calibration table is stale"
