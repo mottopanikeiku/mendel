@@ -160,6 +160,58 @@ def plan_seeds(
     return upper
 
 
+def plan_seeds_with_pilot_uncertainty(
+    effect: float,
+    variance_a: float,
+    variance_b: float,
+    pilot_seeds: int,
+    target: float = 0.8,
+    alpha: float = 0.05,
+) -> int | None:
+    """Smallest seeds per arm under Julious and Owen's (2006) noncentral-t rule.
+
+    The variances are estimates from ``pilot_seeds`` seeds per arm. The rule
+    needs n*effect**2 >= q**2*(variance_a+variance_b), where q is the
+    ``target`` quantile of a noncentral t whose degrees of freedom are the
+    pilot's Satterthwaite df and whose noncentrality is the two-sided critical
+    value at the planned Welch df. That averages one-tailed power over the
+    chi-square uncertainty of the pilot variance. ``effect`` should be fixed
+    before the pilot, not the pilot's gap. Return None for zero effect or zero
+    total variance, as plan_seeds does. docs/CALIBRATION.md calibrates this rule.
+    """
+    effect, variance_a, variance_b, alpha = _planning_inputs(
+        effect, variance_a, variance_b, alpha
+    )
+    target = _probability(target, "target")
+    pilot_seeds = _integer(pilot_seeds, "pilot_seeds", 2)
+    if effect == 0.0 or max(variance_a, variance_b) == 0.0:
+        return None
+    total = variance_a + variance_b
+    if not math.isfinite(total):
+        raise ValueError("variance_a + variance_b must be a finite float")
+    standardized = effect / math.sqrt(total)
+    share = variance_a / total
+    factor = 1.0 / (share * share + (1.0 - share) ** 2)
+    pilot_df = (pilot_seeds - 1.0) * factor
+
+    def enough(n):
+        critical = t.isf(alpha / 2.0, (n - 1.0) * factor)
+        return nct.cdf(standardized * math.sqrt(n), pilot_df, critical) >= target
+
+    if enough(2):
+        return 2
+    lower, upper = 2, 4
+    while not enough(upper):
+        lower, upper = upper, upper * 2
+    while upper - lower > 1:
+        middle = (lower + upper) // 2
+        if enough(middle):
+            upper = middle
+        else:
+            lower = middle
+    return upper
+
+
 def _sample(values: ArrayLike, name: str) -> np.ndarray:
     values = np.asarray(values)
     if values.ndim != 1 or values.size < 2 or values.dtype.kind not in "iuf":

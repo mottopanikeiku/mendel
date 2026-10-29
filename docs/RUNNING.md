@@ -11,9 +11,13 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/analyze.py confir
 uv run python scripts/figures.py
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/neural_analyze.py confirmation
 uv run python scripts/neural_figures.py
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/calibrate.py
+uv run python scripts/calibrate.py --check
 uv run ruff check .
 uv run python -m pytest -q
 ```
+
+`scripts/calibrate.py` is the known-truth planning calibration ([method](CALIBRATION.md)). It simulates known populations and resamples the committed PPO roots, so it needs no training. It is seeded and writes the same tables on x86-64 and arm64; `--check` compares a fresh regeneration with the committed files, floats to a relative 1e-12, and fails if the README calibration table or its quoted numbers no longer match the report.
 
 The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
 
@@ -67,4 +71,4 @@ uv run python scripts/analyze.py plan
 SEED_POWER_TIMEOUT_SECONDS=600 uv run modal run modal_app.py --stage confirmation --output results/confirmation --plan-commit YOUR_PUSHED_PLAN_COMMIT
 ```
 
-The maximum executable count is a design constraint, not a reduced count advertised as 80% power. Ineligible cells stay in the plan. For a prespecified meaningful raw mean difference, the stand-alone planner is `uv run python scripts/plan.py --effect 0.5 --sd-a 1 --sd-b 1`; its answer is per arm. Fix the target effect before looking at data. The planner does not model future variance drift or account for pilot-variance uncertainty.
+The maximum executable count is a design constraint, not a reduced count advertised as 80% power. Ineligible cells stay in the plan. For a prespecified meaningful raw mean difference, the stand-alone planner is `uv run python scripts/plan.py --effect 0.5 --sd-a 1 --sd-b 1`; its answer is per arm. Fix the target effect before looking at data. Add `--pilot-seeds N` when the SDs come from an N-seed-per-arm pilot: it applies Julious and Owen's noncentral-t allowance for pilot-variance uncertainty, the rule the [calibration](CALIBRATION.md) recommends. The planner does not model future variance drift.

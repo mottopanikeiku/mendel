@@ -26,3 +26,5 @@ jobs:
       - run: uv sync --locked --python 3.12 --extra neural
       - run: uv run ruff check .
       - run: uv run python -m pytest -q
+      - name: Regenerate the planning calibration and compare with committed files
+        run: uv run python scripts/calibrate.py --check
