@@ -11,7 +11,9 @@ import pytest
 from scipy.integrate import quad
 from scipy.stats import chi2, nct, norm, t, ttest_ind
 
-from seed_power.stats import plan_seeds, power_at_n, welch_test, wilson_interval
+from seed_power.stats import (
+    plan_seeds, plan_seeds_with_pilot_uncertainty, power_at_n, welch_test, wilson_interval,
+)
 
 
 def reference_power(effect, variance_a, variance_b, n, alpha=0.05):
@@ -285,6 +287,21 @@ def test_cli_prints_per_arm_json_and_assumptions():
     assert result["unplannable_reason"] is None
     assert any("approximate" in assumption for assumption in result["assumptions"])
     assert any("not paired" in assumption for assumption in result["assumptions"])
+
+
+def test_cli_pilot_seeds_add_the_julious_owen_allowance():
+    completed = run_plan("--effect", "0.5", "--sd-a", "1", "--sd-b", "1", "--pilot-seeds", "8")
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result["plug_in_n_per_arm"] == 64
+    assert result["n_per_arm"] == plan_seeds_with_pilot_uncertainty(0.5, 1.0, 1.0, 8) > 64
+    assert result["pilot_seeds"] == 8
+    assert any("Julious-Owen" in assumption for assumption in result["assumptions"])
+    many = json.loads(run_plan("--effect", "0.5", "--sd-a", "1", "--sd-b", "1",
+                               "--pilot-seeds", "100000").stdout)
+    assert many["n_per_arm"] == 64
+    rejected = run_plan("--effect", "0.5", "--sd-a", "1", "--sd-b", "1", "--pilot-seeds", "1")
+    assert rejected.returncode == 2 and "pilot_seeds" in rejected.stderr
 
 
 @pytest.mark.parametrize("effect,sd_a,sd_b,reason", [("0", "1", "1", "zero_effect"), ("1", "0", "0", "zero_total_variance")])
