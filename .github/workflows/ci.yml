@@ -28,3 +28,5 @@ jobs:
       - run: uv run python -m pytest -q
       - name: Regenerate the planning calibration and compare with committed files
         run: uv run python scripts/calibrate.py --check
+      - name: Regenerate the null-control diagnostics and compare with committed files
+        run: uv run python scripts/null_diagnostics.py --check
