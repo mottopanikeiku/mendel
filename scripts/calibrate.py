@@ -733,6 +733,22 @@ def check_claims(result):
         assert accounted == row["replicates"], row
 
 
+NUMBER = re.compile(r"-?\d+(?:\.\d+)?(?:e[-+]?\d+)?")
+
+
+def same_svg(fresh, committed):
+    """Identical SVG text, with drawn coordinates allowed to differ in the sixth figure.
+
+    The tables already match to a relative 1e-12. Matplotlib's last printed
+    coordinate digit can still differ between x86-64 and arm64, so every
+    number in the SVG may differ by a relative 1e-6 and everything else must match.
+    """
+    if NUMBER.split(fresh) != NUMBER.split(committed):
+        return False
+    pairs = zip(NUMBER.findall(fresh), NUMBER.findall(committed), strict=True)
+    return all(math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-6) for a, b in pairs)
+
+
 def check(root, output, figure):
     configuration = json.loads((output / "configuration.json").read_text())
     result = build(root, configuration["sizes"])
@@ -756,7 +772,7 @@ def check(root, output, figure):
     with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / figure.name
         make_figure(result["workflow"], regenerated)
-        assert regenerated.read_bytes() == figure.read_bytes(), f"{figure} is stale"
+        assert same_svg(regenerated.read_text(), figure.read_text()), f"{figure} is stale"
     check_claims(result)
     print(f"Regenerated {', '.join(f'{name}.csv' for name in TABLES)}, configuration.json, "
           "report.md and the figure; all match and every checked claim holds.")

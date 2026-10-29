@@ -284,3 +284,10 @@ def test_declared_nulls_report_no_wrong_sign_errors():
     assert abs(arm_a.mean - arm_b.mean) < 1e-12
     for row in sim.simulate(arm_a, arm_b, effect, 8, 300, 2, 11, (9, 8), null=True):
         assert row["wrong_sign_rate"] is None and row["wrong_sign_mc_se"] is None
+
+
+def test_svg_comparison_allows_only_tiny_coordinate_differences():
+    committed = '<path d="M 10.123456 20.5 L 30 40"/><text>80% target</text>'
+    assert calibrate.same_svg(committed.replace("10.123456", "10.123457"), committed)
+    assert not calibrate.same_svg(committed.replace("10.123456", "10.2"), committed)
+    assert not calibrate.same_svg(committed.replace("80% target", "81% target"), committed)
