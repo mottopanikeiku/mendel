@@ -1,7 +1,7 @@
 # Batch environments
 
 I adapt `src/seed_power/vector_env.py` from
-[control-clock](https://github.com/mottopanikeiku/control-clock/blob/ee9c303de8e7698ca25569fc585e173e3e172bb8/control_clock/vector_env.py)
+[coldstart](https://github.com/mottopanikeiku/coldstart/blob/ee9c303de8e7698ca25569fc585e173e3e172bb8/control_clock/vector_env.py)
 (MIT, copyright 2026 Alp Cetin). It batches the default CartPole-v1 and
 Acrobot-v1 dynamics from Gymnasium 1.2.1. Both training and evaluation use
 these batches; `GymnasiumBatch` is the slow independent reference in tests.
@@ -90,7 +90,7 @@ Gymnasium is MIT-licensed. Its Acrobot source additionally credits the RLPy
 implementation under BSD-3-Clause: Alborz Geramifard, Robert H. Klein,
 Christoph Dann, William Dabney and Jonathan P. How; author Christoph Dann.
 Both notices are retained below. The batch layout and explicit-reset interface
-come from control-clock; I reuse them rather than claiming new dynamics.
+come from coldstart; I reuse them rather than claiming new dynamics.
 
 ### Gymnasium MIT notice
 

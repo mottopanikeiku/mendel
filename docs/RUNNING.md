@@ -15,12 +15,12 @@ uv run ruff check .
 uv run python -m pytest -q
 ```
 
-The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB Control Clock archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
+The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
 
 ## Repeat the original fresh-seed confirmation
 
 I committed and pushed the complete pilot and confirmation counts at
-[`3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b`](https://github.com/mottopanikeiku/seed-power/commit/3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b)
+[`3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b`](https://github.com/mottopanikeiku/mendel/commit/3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b)
 before starting confirmation. The runner requires that exact commit and plan; it refuses to overwrite an existing result directory. A repeat uses the same pseudorandom training seeds, so it is a reproducibility check, not new independent statistical evidence.
 
 ```sh
@@ -37,7 +37,7 @@ I estimate the original cloud compute, including failed attempts, at **$0.0221, 
 ## Export or reproduce neural PPO confirmation
 
 I pushed the complete neural count plan at
-[`260bebb4b1ab2d827ef06371b3681a0293f2b999`](https://github.com/mottopanikeiku/seed-power/commit/260bebb4b1ab2d827ef06371b3681a0293f2b999)
+[`260bebb4b1ab2d827ef06371b3681a0293f2b999`](https://github.com/mottopanikeiku/mendel/commit/260bebb4b1ab2d827ef06371b3681a0293f2b999)
 before any confirmation results. Transport commit `37e9e46` adds source-versioned, durable, resumable batches without changing the training code, design or count plan. Use a Python 3.12 client:
 
 ```sh

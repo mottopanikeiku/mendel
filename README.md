@@ -1,4 +1,4 @@
-# seed-power
+# mendel
 
 How many independent training seeds do I need?
 
@@ -36,7 +36,7 @@ For an illustrative equal-variance Gaussian pooled-t model, two-sided alpha=0.05
 
 ## What I built
 
-I adapt MIT [Control Clock PPO](https://github.com/mottopanikeiku/control-clock/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py), inspired by Apache-2.0 PureJaxRL. Actor and critic each have two 32-unit tanh hidden layers. I train independent roots in a compiled `vmap` ([implementation](src/seed_power/neural.py)).
+I adapt MIT [coldstart PPO](https://github.com/mottopanikeiku/coldstart/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py), inspired by Apache-2.0 PureJaxRL. Actor and critic each have two 32-unit tanh hidden layers. I train independent roots in a compiled `vmap` ([implementation](src/seed_power/neural.py)).
 
 I train every seed for exactly **32,768 CartPole** or **65,536 Acrobot** environment transitions, without qualification stopping. I average sixteen deterministic-argmax evaluation episodes on fixed task-specific reset seeds shared across variants and phases. I count only each first episode, ending at termination or 500 steps. I describe the comparisons and collection in the [neural protocol](docs/NEURAL_PROTOCOL.md) and [original protocol](docs/PROTOCOL.md).
 

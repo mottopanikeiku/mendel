@@ -1,6 +1,6 @@
 # Prospective neural PPO calibration
 
-I repeat the pilot-to-fresh-seed question with a neural PPO implementation, rather than infer neural-network results from affine policy search. I adapt the MIT [Control Clock JAX PPO](https://github.com/mottopanikeiku/control-clock/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py), inspired by Apache-2.0 PureJaxRL. The fixed design is [neural_design.json](../configs/neural_design.json).
+I repeat the pilot-to-fresh-seed question with a neural PPO implementation, rather than infer neural-network results from affine policy search. I adapt the MIT [coldstart JAX PPO](https://github.com/mottopanikeiku/coldstart/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py), inspired by Apache-2.0 PureJaxRL. The fixed design is [neural_design.json](../configs/neural_design.json).
 
 ## Comparisons and experimental units
 
