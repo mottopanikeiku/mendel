@@ -46,6 +46,7 @@ TEST_LABELS = {
 }
 PERMUTATIONS = 4000
 REPLICATES = 4000
+FAMILIES = 10000
 SIMULATIONS = 1000
 SIZE_GRID = (2, 3, 5, 8, 16, 32, 64, 128, 256, 512)
 BOUNDARY = {"CartPole-v1": 500.0, "Acrobot-v1": -500.0}
@@ -138,6 +139,27 @@ def size_rejections(pool, n, replicates, rng, chunk=1000):
         for key, values in pvalues.items():
             counts[key] += int((np.nan_to_num(values, nan=1.0) < ALPHA).sum())
     return counts
+
+
+def resampled_controls(pool, seeds_per_arm, replicates, rng, chunk=1000):
+    """Welch rejection counts and sums of z^2 when every control is redrawn from one pool.
+
+    Each replicate redraws all controls independently, both arms with
+    replacement at the control's planned count. This calibrates the observed
+    count and dispersion against the empirical score distribution instead of
+    exact 5% size and uniform p-values.
+    """
+    counts, squares = np.zeros(replicates, int), np.zeros(replicates)
+    for n in seeds_per_arm:
+        for start in range(0, replicates, chunk):
+            rows = min(chunk, replicates - start)
+            draws = pool[rng.integers(0, pool.size, size=(rows, 2 * n))]
+            with np.errstate(invalid="ignore", divide="ignore"):
+                pvalues = welch_pvalues(draws[:, :n], draws[:, n:])
+            counts[start:start + rows] += pvalues < ALPHA
+            squares[start:start + rows] += stats.norm.isf(pvalues / 2) ** 2
+    return counts, squares
+
 
 
 def poisson_binomial_tail(probabilities, observed):
@@ -260,6 +282,8 @@ def diagnose(task_index, task, design, plans, pilot, confirmation, batch_of, pro
         a = by_arm[cell["comparison_index"], cell["repetition"], 0]
         b = by_arm[cell["comparison_index"], cell["repetition"], 1]
         rows.append({"null_control": cell["null_control"],
+                     "comparison_index": cell["comparison_index"],
+                     "repetition": cell["repetition"],
                      "seeds_per_arm": cell["required_seeds_per_arm"],
                      "pvalues": pair_pvalues(a, b, test_rng)})
     nulls = [row for row in rows if row["null_control"]]
@@ -292,6 +316,10 @@ def diagnose(task_index, task, design, plans, pilot, confirmation, batch_of, pro
         counts = size_rejections(held_out, n, REPLICATES, size_rng)
         sizes_at_plans[n] = {key: value / REPLICATES for key, value in counts.items()}
     expected = {key: sum(sizes_at_plans[n][key] for n in seeds_per_arm) for key in SIZE_TESTS}
+    null_counts, null_squares = resampled_controls(held_out, seeds_per_arm, FAMILIES,
+                                                   stream(7, task_index))
+    count_tail = tail_pvalue(null_counts, rejected)
+    dispersion_tail = tail_pvalue(null_squares, squares)
     grid_rng = stream(2, task_index)
     size_grid = []
     for n in SIZE_GRID:
@@ -327,17 +355,29 @@ def diagnose(task_index, task, design, plans, pilot, confirmation, batch_of, pro
         "null_controls": {
             "executed": len(nulls), "welch_rejections": rejected,
             "binomial_tail": float(stats.binom.sf(rejected - 1, len(nulls), ALPHA)),
-            "ks_uniform_pvalue": float(stats.kstest(welch, "uniform").pvalue),
+            "ks_uniform_reference_pvalue": float(stats.kstest(welch, "uniform").pvalue),
             "dispersion_chi2": squares, "dispersion_df": len(nulls),
-            "dispersion_pvalue": float(stats.chi2.sf(squares, len(nulls))),
+            "dispersion_chi2_reference_pvalue": float(stats.chi2.sf(squares, len(nulls))),
+            "resampled_count_tail": count_tail,
+            "resampled_count_mc_se": math.sqrt(count_tail * (1 - count_tail) / FAMILIES),
+            "resampled_dispersion_pvalue": dispersion_tail,
+            "resampled_dispersion_mc_se": math.sqrt(dispersion_tail * (1 - dispersion_tail)
+                                                    / FAMILIES),
+            "resampled_mean_dispersion": float(null_squares.mean()),
         },
-        "cells": [{"seeds_per_arm": row["seeds_per_arm"],
+        "cells": [{"comparison_index": row["comparison_index"], "repetition": row["repetition"],
+                   "seeds_per_arm": row["seeds_per_arm"],
                    "welch_pvalue": row["pvalues"]["welch"],
                    "welch_size_at_this_count": sizes_at_plans[row["seeds_per_arm"]]["welch"]}
                   for row in sorted(nulls, key=lambda row: row["seeds_per_arm"])],
         "tests": by_test,
-        "nonnull_plans_with_at_most_3_seeds_per_arm": sum(
-            row["seeds_per_arm"] <= 3 for row in rows if not row["null_control"]),
+        "nonnull_plans_with_at_most_3_seeds_per_arm": {
+            "plans": sum(row["seeds_per_arm"] <= 3 for row in rows if not row["null_control"]),
+            "detections": {key: sum(
+                row["pvalues"][key] is not None and row["pvalues"][key] < ALPHA
+                for row in rows if not row["null_control"] and row["seeds_per_arm"] <= 3)
+                for key in TESTS},
+        },
         "planned_count_size": {
             "held_out_base_roots": int(held_out.size),
             "expected_rejections": expected,
@@ -387,12 +427,17 @@ def build(root):
                   "counts resample held-out committed base roots with replacement; they are not "
                   "new training. The block-effect detection probability is SIM."),
         "seed": SEED, "alpha": ALPHA, "permutations": PERMUTATIONS, "replicates": REPLICATES,
-        "simulations": SIMULATIONS,
+        "simulations": SIMULATIONS, "resampled_families": FAMILIES,
         "tests": {key: TEST_LABELS[key] for key in TESTS},
+        "small_sample_limits": {
+            "permutation_min_pvalue": [2 / math.comb(2 * n, n) for n in (2, 3)],
+            "mann_whitney_constant_arms_of_three_pvalue": float(stats.mannwhitneyu(
+                np.zeros(3), np.ones(3), alternative="two-sided", method="asymptotic").pvalue),
+        },
         "streams": ("NumPy PCG64 from SeedSequence(seed, spawn_key=(stream, task index)). "
                     "0 permutation tests, 1 sizes at planned counts, 2 size grid, "
                     "3 batch regroupings, 4 producer regroupings, 5 block regroupings, "
-                    "6 block-effect simulation."),
+                    "6 block-effect simulation, 7 all controls redrawn together."),
         "sources": {path: sha256(raw_path(root / path))
                     for path in (DESIGN, PLAN, PILOT_RAW, CONFIRMATION_RAW, ENVIRONMENT)},
         "per_task": {task: diagnose(index, task, design, plans, pilot, confirmation, batch_of,
@@ -407,8 +452,12 @@ def build(root):
         "binomial_tail": float(stats.binom.sf(rejected - 1, executed, ALPHA)),
         "bonferroni_binomial_tail": min(1.0, len(entries) * min(
             entry["null_controls"]["binomial_tail"] for entry in entries)),
-        "bonferroni_dispersion_pvalue": min(1.0, len(entries) * min(
-            entry["null_controls"]["dispersion_pvalue"] for entry in entries)),
+        "bonferroni_dispersion_chi2_reference_pvalue": min(1.0, len(entries) * min(
+            entry["null_controls"]["dispersion_chi2_reference_pvalue"] for entry in entries)),
+        "bonferroni_resampled_count_tail": min(1.0, len(entries) * min(
+            entry["null_controls"]["resampled_count_tail"] for entry in entries)),
+        "bonferroni_resampled_dispersion_pvalue": min(1.0, len(entries) * min(
+            entry["null_controls"]["resampled_dispersion_pvalue"] for entry in entries)),
     }
     return result, pilot, confirmation
 
@@ -430,6 +479,13 @@ def render_report(result):
     nc, size = cart["null_controls"], cart["planned_count_size"]
     tests, block = cart["tests"], cart["block_effect"]
     held = block["held_out_blocks"]
+    small = cart["nonnull_plans_with_at_most_3_seeds_per_arm"]
+    limits = result["small_sample_limits"]
+    largest_se = max(entry["null_controls"][key] for entry in result["per_task"].values()
+                     for key in ("resampled_count_mc_se", "resampled_dispersion_mc_se"))
+    detected = block["detection_probability_at_implied_share"]
+    detection_half_width = 100 * 1.96 * math.sqrt(detected * (1 - detected)
+                                                  / result["simulations"])
     artifacts = cart["artifact_checks"]
     expected = size["expected_rejections"]
     lines = [
@@ -451,40 +507,53 @@ def render_report(result):
         f"controls with the committed Welch test. If every test had exactly 5% size, "
         f"{nc['welch_rejections']} or more rejections would have probability "
         f"{p(nc['binomial_tail'])}. The {nc['executed']} z-statistics are also over-dispersed: "
-        f"their squares sum to {nc['dispersion_chi2']:.1f} on {nc['dispersion_df']} degrees of "
-        f"freedom (p = {p(nc['dispersion_pvalue'])}). Acrobot-v1 rejected "
+        f"their squares sum to {nc['dispersion_chi2']:.3f}. As an approximate reference that "
+        "assumes independent, exactly uniform p-values, a chi-square with "
+        f"{nc['dispersion_df']} degrees of freedom gives p = "
+        f"{p(nc['dispersion_chi2_reference_pvalue'])}. Welch p-values on these skewed scores are "
+        "only approximately uniform, so I also calibrated both statistics empirically: "
+        f"redrawing all {nc['executed']} controls from the held-out base roots "
+        f"{result['resampled_families']} times gives P(sum of z² ≥ "
+        f"{nc['dispersion_chi2']:.3f}) = {p(nc['resampled_dispersion_pvalue'])} "
+        f"(Monte Carlo SE {nc['resampled_dispersion_mc_se']:.4f}) and P({nc['welch_rejections']} "
+        f"or more rejections) = {p(nc['resampled_count_tail'])} (SE "
+        f"{nc['resampled_count_mc_se']:.4f}). Acrobot-v1 rejected "
         f"{acro['null_controls']['welch_rejections']}/{acro['null_controls']['executed']} "
         f"(tail {p(acro['null_controls']['binomial_tail'])}; squares "
-        f"{acro['null_controls']['dispersion_chi2']:.1f}, p = "
-        f"{p(acro['null_controls']['dispersion_pvalue'])}). Both tasks together rejected "
-        f"{family['welch_rejections']}/{family['executed']} (tail {p(family['binomial_tail'])}). "
-        f"Adjusted for looking at two tasks (Bonferroni), the CartPole tail is "
-        f"{p(family['bonferroni_binomial_tail'])} and its dispersion p-value is "
-        f"{p(family['bonferroni_dispersion_pvalue'])}.",
+        f"{acro['null_controls']['dispersion_chi2']:.1f}, chi-square reference p = "
+        f"{p(acro['null_controls']['dispersion_chi2_reference_pvalue'])}, resampled p = "
+        f"{p(acro['null_controls']['resampled_dispersion_pvalue'])}). Both tasks together "
+        f"rejected {family['welch_rejections']}/{family['executed']} (tail "
+        f"{p(family['binomial_tail'])}). Adjusted only for looking at two tasks (Bonferroni), "
+        "not for the other exploratory checks here, the CartPole tail is "
+        f"{p(family['bonferroni_binomial_tail'])} at exact 5% size and "
+        f"{p(family['bonferroni_resampled_count_tail'])} resampled, and its dispersion p-value "
+        f"is {p(family['bonferroni_dispersion_chi2_reference_pvalue'])} against the chi-square "
+        f"reference and {p(family['bonferroni_resampled_dispersion_pvalue'])} resampled.",
         "",
-        "Nothing I checked explains the CartPole excess:",
+        "These diagnostics did not identify an explanation for the CartPole excess:",
         "",
         f"- **Other tests.** On the same {nc['executed']} controls, Student's t rejected "
         f"{tests['student']['null_rejections']}, a permutation test of the mean gap "
         f"{tests['permutation']['null_rejections']}, Mann-Whitney "
         f"{tests['mann_whitney']['null_rejections']} and Yuen's 20% trimmed test "
-        f"{tests['yuen']['null_rejections']}. The permutation test is exact when the roots are "
-        "exchangeable, so the excess is not an artifact of a t approximation.",
+        f"{tests['yuen']['null_rejections']}. Elevated rejection counts also appear under tests "
+        "that do not use the t approximation.",
         f"- **Test size at the planned counts.** Drawing both arms from "
         f"{size['held_out_base_roots']} held-out base roots at each control's planned count, "
         f"Welch should reject {expected['welch']:.2f} of the {nc['executed']} (Student "
         f"{expected['student']:.2f}, Mann-Whitney {expected['mann_whitney']:.2f}, Yuen "
         f"{expected['yuen']:.2f}). With those sizes, {nc['welch_rejections']} or more Welch "
-        f"rejections has probability {p(size['welch_poisson_binomial_tail'])}. The bounded, "
-        "skewed CartPole scores do not inflate the test's size at these counts.",
-        f"- **Execution.** Base roots show no difference between "
+        f"rejections has probability {p(size['welch_poisson_binomial_tail'])}. Resampled IID "
+        "draws from this empirical pool gave sizes near nominal at these counts.",
+        f"- **Execution.** These checks detected no difference between "
         f"{artifacts['batches']['groups']} training batches (permutation p = "
         f"{p(artifacts['batches']['permutation_pvalue'])}), between arm 0 and arm 1 of the "
         f"controls (Welch p = {p(artifacts['null_arm_welch_pvalue'])}), between pilot and "
         f"confirmation roots (KS p = {p(artifacts['pilot_vs_confirmation_ks_pvalue'])}), or "
         f"between control roots and other base roots (KS p = "
-        f"{p(artifacts['null_cells_vs_other_base_ks_pvalue'])}). Every CartPole base-variant "
-        "batch came from the same transport commit.",
+        f"{p(artifacts['null_cells_vs_other_base_ks_pvalue'])}). They cannot rule out small "
+        "differences. Every CartPole base-variant batch came from the same transport commit.",
         f"- **Seed blocks.** The over-dispersion is what a small random shift shared by all "
         f"roots of one arm would produce. A shift variance of {block['implied_share']:.4f} times "
         f"the root variance would explain it on average. In the {held['groups']} base blocks "
@@ -493,35 +562,51 @@ def render_report(result):
         f"Kruskal-Wallis p = {p(held['kruskal_pvalue'])}) and an estimated share of "
         f"{block['estimated_share']:.4f}. A share of {block['implied_share']:.4f} would have "
         f"given p < 0.05 in {percent(block['detection_probability_at_implied_share'])} of "
-        f"{result['simulations']} simulations. At the estimated share, a normal approximation "
+        f"{result['simulations']} simulations (95% Monte Carlo half-width "
+        f"{detection_half_width:.1f} points). At the estimated share, a normal approximation "
         f"puts the expected Welch rejections at "
         f"{block['expected_welch_rejections']['normal_at_estimated_share']:.2f} instead of "
         f"{expected['welch']:.2f}. I know of no mechanism that gives consecutive root seeds a "
-        "shared shift, and the training batches, which also group consecutive seeds, show none.",
+        "shared shift, and the batch check, which also groups consecutive seeds, detected no "
+        "difference.",
         "",
-        "So I cannot explain the excess. It may be chance: adjusted for two tasks, the tail is "
-        f"{p(family['bonferroni_binomial_tail'])}, although the adjusted dispersion p-value is "
-        f"{p(family['bonferroni_dispersion_pvalue'])}. It may also be a small seed-block "
-        "effect, which these data neither confirm nor rule out. Acrobot-v1 shows nothing "
-        "unusual in any check.",
+        "So these diagnostics did not identify an explanation. It may be chance: adjusted only "
+        "for the two tasks, the resampled tail is "
+        f"{p(family['bonferroni_resampled_count_tail'])} and "
+        "the resampled dispersion p-value is "
+        f"{p(family['bonferroni_resampled_dispersion_pvalue'])}. It may also be a small "
+        "seed-block effect, which these data neither confirm nor rule out. The Acrobot-v1 "
+        "checks gave no unusual result.",
         "",
         "## Null controls by task",
         "",
-        "| Task | Executed | Welch rejections | P(at least this many) | Sum of z² (df) "
-        "| Dispersion p | KS p against uniform |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Task | Executed | Welch rejections | P(at least this many), exact 5% size "
+        "| P(at least this many), resampled | Sum of z² | Chi-square reference p "
+        "| Resampled p | KS p against uniform (reference) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for task in tasks:
         entry = result["per_task"][task]["null_controls"]
         lines.append(
             f"| {task} | {entry['executed']} | {entry['welch_rejections']} | "
-            f"{p(entry['binomial_tail'])} | {entry['dispersion_chi2']:.1f} "
-            f"({entry['dispersion_df']}) | {p(entry['dispersion_pvalue'])} | "
-            f"{p(entry['ks_uniform_pvalue'])} |")
+            f"{p(entry['binomial_tail'])} | {p(entry['resampled_count_tail'])} | "
+            f"{entry['dispersion_chi2']:.3f} | {p(entry['dispersion_chi2_reference_pvalue'])} | "
+            f"{p(entry['resampled_dispersion_pvalue'])} | "
+            f"{p(entry['ks_uniform_reference_pvalue'])} |")
     lines += [
         "",
-        "Each z-statistic is the normal quantile of a two-sided Welch p-value. Under the null, "
-        "their squares sum to a chi-square with one degree of freedom per control.",
+        "Each z-statistic is the normal quantile of a two-sided Welch p-value. The chi-square "
+        f"({nc['dispersion_df']} and {acro['null_controls']['dispersion_df']} degrees of "
+        "freedom) and KS columns are approximate references: they assume independent, exactly "
+        "uniform p-values, which Welch on these skewed scores only approximates. The resampled "
+        f"columns redraw all controls together {result['resampled_families']} times, both arms "
+        "with replacement from the held-out base roots at each control's planned count, and "
+        "assume roots are independent draws from that pool. Their Monte Carlo SE is at most "
+        f"{largest_se:.4f}. "
+        "The resampled sum of z² averages "
+        f"{nc['resampled_mean_dispersion']:.1f} for CartPole-v1 and "
+        f"{acro['null_controls']['resampled_mean_dispersion']:.1f} for Acrobot-v1, close to "
+        "the chi-square means.",
         "",
         "## Every test on every executed cell",
         "",
@@ -538,12 +623,21 @@ def render_report(result):
     lines += [
         "",
         "No test was undefined on any cell. The permutation test uses "
-        f"{result['permutations']} random relabelings. With 2 or 3 seeds per arm, the "
-        "permutation and Mann-Whitney tests cannot reach p < 0.05, which is why they detect "
-        "fewer different-variant cells: "
-        f"{cart['nonnull_plans_with_at_most_3_seeds_per_arm']} of the "
-        f"{tests['welch']['nonnull_plans']} CartPole different-variant plans used that few "
-        "seeds.",
+        f"{result['permutations']} random relabelings. With 2 or 3 seeds per arm its exact "
+        f"p-value is at least {limits['permutation_min_pvalue'][0]:.3f} or "
+        f"{limits['permutation_min_pvalue'][1]:.3f}, so it cannot reach p < 0.05. The "
+        "asymptotic, tie-corrected Mann-Whitney p-value I use can, but only with 3 seeds per "
+        "arm when each arm is constant and the two differ (p = "
+        f"{p(limits['mann_whitney_constant_arms_of_three_pvalue'])}). "
+        f"{small['plans']} of the {tests['welch']['nonnull_plans']} CartPole different-variant "
+        "plans used 2 or 3 seeds. On those plans Welch detected "
+        f"{small['detections']['welch']}, the permutation test "
+        f"{small['detections']['permutation']} and Mann-Whitney "
+        f"{small['detections']['mann_whitney']}; on the other "
+        f"{tests['welch']['nonnull_plans'] - small['plans']} they detected "
+        f"{tests['welch']['nonnull_detections'] - small['detections']['welch']}, "
+        f"{tests['permutation']['nonnull_detections'] - small['detections']['permutation']} "
+        f"and {tests['mann_whitney']['nonnull_detections'] - small['detections']['mann_whitney']}.",
         "",
         "## Test size from held-out roots",
         "",
@@ -683,7 +777,14 @@ def check_claims(result):
     """The qualitative statements in the report."""
     cart, acro = (result["per_task"][task] for task in ("CartPole-v1", "Acrobot-v1"))
     assert cart["null_controls"]["binomial_tail"] < ALPHA, "CartPole excess"
-    assert cart["null_controls"]["dispersion_pvalue"] < ALPHA, "CartPole over-dispersion"
+    for key in ("dispersion_chi2_reference_pvalue", "resampled_dispersion_pvalue",
+                "resampled_count_tail"):
+        assert cart["null_controls"][key] < ALPHA, f"CartPole excess: {key}"
+        assert acro["null_controls"][key] > ALPHA, f"Acrobot: {key}"
+    for entry in (cart, acro):
+        controls = entry["null_controls"]
+        assert abs(controls["resampled_mean_dispersion"] - controls["dispersion_df"]) < 1.0
+    assert result["family"]["bonferroni_resampled_count_tail"] > ALPHA, "chance plausible"
     assert result["family"]["bonferroni_binomial_tail"] > ALPHA, "chance remains plausible"
     expected = cart["planned_count_size"]["expected_rejections"]["welch"]
     for key in ("student", "permutation", "mann_whitney"):
@@ -709,13 +810,15 @@ def check_claims(result):
         for key in TESTS:
             assert entry["tests"][key]["null_undefined"] == 0
             assert entry["tests"][key]["nonnull_undefined"] == 0
-        for row in entry["size_by_seeds_per_arm"]:
-            if row["seeds_per_arm"] <= 3:
-                assert row["mann_whitney"] == 0, "Mann-Whitney cannot reject 2 or 3 seeds"
+        small = entry["nonnull_plans_with_at_most_3_seeds_per_arm"]
+        assert small["detections"]["permutation"] == 0, "permutation cannot reject 2-3 seeds"
+    limits = result["small_sample_limits"]
+    assert min(limits["permutation_min_pvalue"]) > ALPHA
+    assert limits["mann_whitney_constant_arms_of_three_pvalue"] < ALPHA
     assert cart["artifact_checks"]["producer_commits"] == 1, "one CartPole transport commit"
     acro_blocks = acro["block_effect"]["held_out_blocks"]
     assert acro["null_controls"]["binomial_tail"] > ALPHA
-    assert acro["null_controls"]["dispersion_pvalue"] > ALPHA
+    assert acro["null_controls"]["dispersion_chi2_reference_pvalue"] > ALPHA
     assert acro_blocks["permutation_pvalue"] > ALPHA, "Acrobot shows nothing unusual"
 
 

@@ -5,6 +5,7 @@
   "permutations": 4000,
   "replicates": 4000,
   "simulations": 1000,
+  "resampled_families": 10000,
   "tests": {
     "welch": "Welch t (the committed test)",
     "student": "Student pooled t",
@@ -12,7 +13,14 @@
     "mann_whitney": "Mann-Whitney U",
     "yuen": "Yuen 20% trimmed means"
   },
-  "streams": "NumPy PCG64 from SeedSequence(seed, spawn_key=(stream, task index)). 0 permutation tests, 1 sizes at planned counts, 2 size grid, 3 batch regroupings, 4 producer regroupings, 5 block regroupings, 6 block-effect simulation.",
+  "small_sample_limits": {
+    "permutation_min_pvalue": [
+      0.3333333333333333,
+      0.1
+    ],
+    "mann_whitney_constant_arms_of_three_pvalue": 0.04685417760387376
+  },
+  "streams": "NumPy PCG64 from SeedSequence(seed, spawn_key=(stream, task index)). 0 permutation tests, 1 sizes at planned counts, 2 size grid, 3 batch regroupings, 4 producer regroupings, 5 block regroupings, 6 block-effect simulation, 7 all controls redrawn together.",
   "sources": {
     "configs/neural_design.json": "e273435025232101eb26b92efd91cc5e2c4f2bef8b0ab7e9c0009115234bb511",
     "results/neural/pilot_plan.json": "743a697458d9959eccb276d464275bdd534ac8134f0d16558b6ad27cd530c187",
@@ -26,188 +34,265 @@
         "executed": 36,
         "welch_rejections": 5,
         "binomial_tail": 0.032362707258672054,
-        "ks_uniform_pvalue": 0.10537713999931353,
+        "ks_uniform_reference_pvalue": 0.10537713999931353,
         "dispersion_chi2": 55.11217680866996,
         "dispersion_df": 36,
-        "dispersion_pvalue": 0.021676833931306358
+        "dispersion_chi2_reference_pvalue": 0.021676833931306358,
+        "resampled_count_tail": 0.033096690330966905,
+        "resampled_count_mc_se": 0.00178889070152715,
+        "resampled_dispersion_pvalue": 0.020997900209979003,
+        "resampled_dispersion_mc_se": 0.0014337708462913718,
+        "resampled_mean_dispersion": 36.0154423067318
       },
       "cells": [
         {
+          "comparison_index": 4,
+          "repetition": 34,
           "seeds_per_arm": 10,
           "welch_pvalue": 0.12789566085870205,
           "welch_size_at_this_count": 0.0535
         },
         {
+          "comparison_index": 4,
+          "repetition": 28,
           "seeds_per_arm": 16,
           "welch_pvalue": 0.8234933112524494,
           "welch_size_at_this_count": 0.05275
         },
         {
+          "comparison_index": 4,
+          "repetition": 15,
           "seeds_per_arm": 18,
           "welch_pvalue": 0.5872921411899299,
           "welch_size_at_this_count": 0.0455
         },
         {
+          "comparison_index": 4,
+          "repetition": 38,
           "seeds_per_arm": 18,
           "welch_pvalue": 0.056133906307945965,
           "welch_size_at_this_count": 0.0455
         },
         {
+          "comparison_index": 4,
+          "repetition": 18,
           "seeds_per_arm": 19,
           "welch_pvalue": 0.6954873948151434,
           "welch_size_at_this_count": 0.053
         },
         {
+          "comparison_index": 4,
+          "repetition": 20,
           "seeds_per_arm": 19,
           "welch_pvalue": 0.8357562503847955,
           "welch_size_at_this_count": 0.053
         },
         {
+          "comparison_index": 4,
+          "repetition": 48,
           "seeds_per_arm": 20,
           "welch_pvalue": 0.3110007845988843,
           "welch_size_at_this_count": 0.05225
         },
         {
+          "comparison_index": 4,
+          "repetition": 39,
           "seeds_per_arm": 21,
           "welch_pvalue": 0.026992832117203172,
           "welch_size_at_this_count": 0.0495
         },
         {
+          "comparison_index": 4,
+          "repetition": 22,
           "seeds_per_arm": 22,
           "welch_pvalue": 0.169287807452921,
           "welch_size_at_this_count": 0.04625
         },
         {
+          "comparison_index": 4,
+          "repetition": 47,
           "seeds_per_arm": 30,
           "welch_pvalue": 0.0091362920392379,
           "welch_size_at_this_count": 0.04875
         },
         {
+          "comparison_index": 4,
+          "repetition": 14,
           "seeds_per_arm": 35,
           "welch_pvalue": 0.7053887327223316,
           "welch_size_at_this_count": 0.04925
         },
         {
+          "comparison_index": 4,
+          "repetition": 7,
           "seeds_per_arm": 37,
           "welch_pvalue": 0.3354935034341169,
           "welch_size_at_this_count": 0.0505
         },
         {
+          "comparison_index": 4,
+          "repetition": 27,
           "seeds_per_arm": 38,
           "welch_pvalue": 0.784669120699595,
           "welch_size_at_this_count": 0.0525
         },
         {
+          "comparison_index": 4,
+          "repetition": 41,
           "seeds_per_arm": 38,
           "welch_pvalue": 0.1195991697790343,
           "welch_size_at_this_count": 0.0525
         },
         {
+          "comparison_index": 4,
+          "repetition": 49,
           "seeds_per_arm": 38,
           "welch_pvalue": 0.04531499387719434,
           "welch_size_at_this_count": 0.0525
         },
         {
+          "comparison_index": 4,
+          "repetition": 40,
           "seeds_per_arm": 41,
           "welch_pvalue": 0.2533795361723503,
           "welch_size_at_this_count": 0.049
         },
         {
+          "comparison_index": 4,
+          "repetition": 45,
           "seeds_per_arm": 46,
           "welch_pvalue": 0.21658529442784163,
           "welch_size_at_this_count": 0.04875
         },
         {
+          "comparison_index": 4,
+          "repetition": 9,
           "seeds_per_arm": 47,
           "welch_pvalue": 0.1874812227501778,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 4,
+          "repetition": 35,
           "seeds_per_arm": 51,
           "welch_pvalue": 0.07519837463687168,
           "welch_size_at_this_count": 0.056
         },
         {
+          "comparison_index": 4,
+          "repetition": 10,
           "seeds_per_arm": 61,
           "welch_pvalue": 0.981582438065731,
           "welch_size_at_this_count": 0.05025
         },
         {
+          "comparison_index": 4,
+          "repetition": 13,
           "seeds_per_arm": 61,
           "welch_pvalue": 0.5675064504620002,
           "welch_size_at_this_count": 0.05025
         },
         {
+          "comparison_index": 4,
+          "repetition": 25,
           "seeds_per_arm": 82,
           "welch_pvalue": 0.9571524748080397,
           "welch_size_at_this_count": 0.04725
         },
         {
+          "comparison_index": 4,
+          "repetition": 36,
           "seeds_per_arm": 82,
           "welch_pvalue": 0.3868679014050713,
           "welch_size_at_this_count": 0.04725
         },
         {
+          "comparison_index": 4,
+          "repetition": 0,
           "seeds_per_arm": 87,
           "welch_pvalue": 0.10756965223461747,
           "welch_size_at_this_count": 0.046
         },
         {
+          "comparison_index": 4,
+          "repetition": 46,
           "seeds_per_arm": 97,
           "welch_pvalue": 0.8401903907975592,
           "welch_size_at_this_count": 0.05225
         },
         {
+          "comparison_index": 4,
+          "repetition": 23,
           "seeds_per_arm": 121,
           "welch_pvalue": 0.03177401181856244,
           "welch_size_at_this_count": 0.0465
         },
         {
+          "comparison_index": 4,
+          "repetition": 42,
           "seeds_per_arm": 124,
           "welch_pvalue": 0.09119166056412287,
           "welch_size_at_this_count": 0.04925
         },
         {
+          "comparison_index": 4,
+          "repetition": 32,
           "seeds_per_arm": 137,
           "welch_pvalue": 0.35823251201437645,
           "welch_size_at_this_count": 0.04875
         },
         {
+          "comparison_index": 4,
+          "repetition": 12,
           "seeds_per_arm": 148,
           "welch_pvalue": 0.33743897451491234,
           "welch_size_at_this_count": 0.048
         },
         {
+          "comparison_index": 4,
+          "repetition": 6,
           "seeds_per_arm": 180,
           "welch_pvalue": 0.9055740851013372,
           "welch_size_at_this_count": 0.05125
         },
         {
+          "comparison_index": 4,
+          "repetition": 33,
           "seeds_per_arm": 183,
           "welch_pvalue": 0.8678572631586542,
           "welch_size_at_this_count": 0.0545
         },
         {
+          "comparison_index": 4,
+          "repetition": 11,
           "seeds_per_arm": 241,
           "welch_pvalue": 0.042515498833448656,
           "welch_size_at_this_count": 0.0515
         },
         {
+          "comparison_index": 4,
+          "repetition": 17,
           "seeds_per_arm": 262,
           "welch_pvalue": 0.6662159696214662,
           "welch_size_at_this_count": 0.04775
         },
         {
+          "comparison_index": 4,
+          "repetition": 19,
           "seeds_per_arm": 273,
           "welch_pvalue": 0.9372357153313255,
           "welch_size_at_this_count": 0.048
         },
         {
+          "comparison_index": 4,
+          "repetition": 37,
           "seeds_per_arm": 415,
           "welch_pvalue": 0.7740717682280216,
           "welch_size_at_this_count": 0.05525
         },
         {
+          "comparison_index": 4,
+          "repetition": 5,
           "seeds_per_arm": 436,
           "welch_pvalue": 0.24963096750276728,
           "welch_size_at_this_count": 0.048
@@ -250,7 +335,16 @@
           "nonnull_plans": 175
         }
       },
-      "nonnull_plans_with_at_most_3_seeds_per_arm": 69,
+      "nonnull_plans_with_at_most_3_seeds_per_arm": {
+        "plans": 69,
+        "detections": {
+          "welch": 60,
+          "student": 64,
+          "permutation": 0,
+          "mann_whitney": 0,
+          "yuen": 60
+        }
+      },
       "planned_count_size": {
         "held_out_base_roots": 11091,
         "expected_rejections": {
@@ -452,198 +546,279 @@
         "executed": 38,
         "welch_rejections": 2,
         "binomial_tail": 0.5728127759608739,
-        "ks_uniform_pvalue": 0.4850208397602801,
+        "ks_uniform_reference_pvalue": 0.4850208397602801,
         "dispersion_chi2": 34.66126637074001,
         "dispersion_df": 38,
-        "dispersion_pvalue": 0.6246320737525132
+        "dispersion_chi2_reference_pvalue": 0.6246320737525132,
+        "resampled_count_tail": 0.5693430656934306,
+        "resampled_count_mc_se": 0.004951681928801936,
+        "resampled_dispersion_pvalue": 0.6152384761523848,
+        "resampled_dispersion_mc_se": 0.004865388921906205,
+        "resampled_mean_dispersion": 37.87535671692913
       },
       "cells": [
         {
+          "comparison_index": 9,
+          "repetition": 34,
           "seeds_per_arm": 12,
           "welch_pvalue": 0.7200515029391756,
           "welch_size_at_this_count": 0.04925
         },
         {
+          "comparison_index": 9,
+          "repetition": 38,
           "seeds_per_arm": 14,
           "welch_pvalue": 0.03810446118690715,
           "welch_size_at_this_count": 0.047
         },
         {
+          "comparison_index": 9,
+          "repetition": 25,
           "seeds_per_arm": 15,
           "welch_pvalue": 0.4570121685438121,
           "welch_size_at_this_count": 0.05075
         },
         {
+          "comparison_index": 9,
+          "repetition": 41,
           "seeds_per_arm": 17,
           "welch_pvalue": 0.6866898785147568,
           "welch_size_at_this_count": 0.056
         },
         {
+          "comparison_index": 9,
+          "repetition": 42,
           "seeds_per_arm": 17,
           "welch_pvalue": 0.43495918643971554,
           "welch_size_at_this_count": 0.056
         },
         {
+          "comparison_index": 9,
+          "repetition": 23,
           "seeds_per_arm": 18,
           "welch_pvalue": 0.2360129625013653,
           "welch_size_at_this_count": 0.05025
         },
         {
+          "comparison_index": 9,
+          "repetition": 48,
           "seeds_per_arm": 19,
           "welch_pvalue": 0.590194624650566,
           "welch_size_at_this_count": 0.04925
         },
         {
+          "comparison_index": 9,
+          "repetition": 33,
           "seeds_per_arm": 20,
           "welch_pvalue": 0.6637437355721423,
           "welch_size_at_this_count": 0.05225
         },
         {
+          "comparison_index": 9,
+          "repetition": 22,
           "seeds_per_arm": 24,
           "welch_pvalue": 0.6086912865751801,
           "welch_size_at_this_count": 0.049
         },
         {
+          "comparison_index": 9,
+          "repetition": 19,
           "seeds_per_arm": 27,
           "welch_pvalue": 0.20311899802673622,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 31,
           "seeds_per_arm": 27,
           "welch_pvalue": 0.4071393804857364,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 8,
           "seeds_per_arm": 29,
           "welch_pvalue": 0.4428555074816447,
           "welch_size_at_this_count": 0.04775
         },
         {
+          "comparison_index": 9,
+          "repetition": 3,
           "seeds_per_arm": 31,
           "welch_pvalue": 0.35005653624062194,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 13,
           "seeds_per_arm": 31,
           "welch_pvalue": 0.46794786050845494,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 4,
           "seeds_per_arm": 34,
           "welch_pvalue": 0.6031652982175529,
           "welch_size_at_this_count": 0.05
         },
         {
+          "comparison_index": 9,
+          "repetition": 17,
           "seeds_per_arm": 45,
           "welch_pvalue": 0.12515628302218457,
           "welch_size_at_this_count": 0.05325
         },
         {
+          "comparison_index": 9,
+          "repetition": 37,
           "seeds_per_arm": 46,
           "welch_pvalue": 0.7034443810528241,
           "welch_size_at_this_count": 0.0505
         },
         {
+          "comparison_index": 9,
+          "repetition": 44,
           "seeds_per_arm": 66,
           "welch_pvalue": 0.13255749300762493,
           "welch_size_at_this_count": 0.049
         },
         {
+          "comparison_index": 9,
+          "repetition": 32,
           "seeds_per_arm": 72,
           "welch_pvalue": 0.7584231760221148,
           "welch_size_at_this_count": 0.05
         },
         {
+          "comparison_index": 9,
+          "repetition": 7,
           "seeds_per_arm": 74,
           "welch_pvalue": 0.2845223023699588,
           "welch_size_at_this_count": 0.05275
         },
         {
+          "comparison_index": 9,
+          "repetition": 35,
           "seeds_per_arm": 74,
           "welch_pvalue": 0.9712182519098744,
           "welch_size_at_this_count": 0.05275
         },
         {
+          "comparison_index": 9,
+          "repetition": 9,
           "seeds_per_arm": 77,
           "welch_pvalue": 0.7015269641160097,
           "welch_size_at_this_count": 0.048
         },
         {
+          "comparison_index": 9,
+          "repetition": 18,
           "seeds_per_arm": 89,
           "welch_pvalue": 0.7807148373589977,
           "welch_size_at_this_count": 0.052
         },
         {
+          "comparison_index": 9,
+          "repetition": 28,
           "seeds_per_arm": 94,
           "welch_pvalue": 0.27377970218469444,
           "welch_size_at_this_count": 0.0465
         },
         {
+          "comparison_index": 9,
+          "repetition": 16,
           "seeds_per_arm": 97,
           "welch_pvalue": 0.37143671549782464,
           "welch_size_at_this_count": 0.05325
         },
         {
+          "comparison_index": 9,
+          "repetition": 40,
           "seeds_per_arm": 97,
           "welch_pvalue": 0.36423025270406606,
           "welch_size_at_this_count": 0.05325
         },
         {
+          "comparison_index": 9,
+          "repetition": 11,
           "seeds_per_arm": 105,
           "welch_pvalue": 0.7894001740878369,
           "welch_size_at_this_count": 0.04
         },
         {
+          "comparison_index": 9,
+          "repetition": 39,
           "seeds_per_arm": 108,
           "welch_pvalue": 0.122369936618059,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 14,
           "seeds_per_arm": 109,
           "welch_pvalue": 0.9410503122595648,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 12,
           "seeds_per_arm": 114,
           "welch_pvalue": 0.7174849249475157,
           "welch_size_at_this_count": 0.04775
         },
         {
+          "comparison_index": 9,
+          "repetition": 24,
           "seeds_per_arm": 117,
           "welch_pvalue": 0.2783086870584724,
           "welch_size_at_this_count": 0.0575
         },
         {
+          "comparison_index": 9,
+          "repetition": 29,
           "seeds_per_arm": 135,
           "welch_pvalue": 0.2525896720879314,
           "welch_size_at_this_count": 0.0425
         },
         {
+          "comparison_index": 9,
+          "repetition": 10,
           "seeds_per_arm": 140,
           "welch_pvalue": 0.9261340100774519,
           "welch_size_at_this_count": 0.05
         },
         {
+          "comparison_index": 9,
+          "repetition": 45,
           "seeds_per_arm": 173,
           "welch_pvalue": 0.026979513524708086,
           "welch_size_at_this_count": 0.04975
         },
         {
+          "comparison_index": 9,
+          "repetition": 47,
           "seeds_per_arm": 312,
           "welch_pvalue": 0.1352155540560211,
           "welch_size_at_this_count": 0.04925
         },
         {
+          "comparison_index": 9,
+          "repetition": 30,
           "seeds_per_arm": 328,
           "welch_pvalue": 0.42895697325347326,
           "welch_size_at_this_count": 0.0535
         },
         {
+          "comparison_index": 9,
+          "repetition": 43,
           "seeds_per_arm": 390,
           "welch_pvalue": 0.6608950147182735,
           "welch_size_at_this_count": 0.05525
         },
         {
+          "comparison_index": 9,
+          "repetition": 5,
           "seeds_per_arm": 490,
           "welch_pvalue": 0.7266705257772184,
           "welch_size_at_this_count": 0.05175
@@ -686,7 +861,16 @@
           "nonnull_plans": 132
         }
       },
-      "nonnull_plans_with_at_most_3_seeds_per_arm": 0,
+      "nonnull_plans_with_at_most_3_seeds_per_arm": {
+        "plans": 0,
+        "detections": {
+          "welch": 0,
+          "student": 0,
+          "permutation": 0,
+          "mann_whitney": 0,
+          "yuen": 0
+        }
+      },
       "planned_count_size": {
         "held_out_base_roots": 19340,
         "expected_rejections": {
@@ -896,6 +1080,8 @@
     "welch_rejections": 7,
     "binomial_tail": 0.07659807707961765,
     "bonferroni_binomial_tail": 0.06472541451734411,
-    "bonferroni_dispersion_pvalue": 0.043353667862612716
+    "bonferroni_dispersion_chi2_reference_pvalue": 0.043353667862612716,
+    "bonferroni_resampled_count_tail": 0.06619338066193381,
+    "bonferroni_resampled_dispersion_pvalue": 0.041995800419958006
   }
 }

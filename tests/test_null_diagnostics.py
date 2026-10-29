@@ -65,10 +65,41 @@ def test_resampled_sizes_are_near_nominal_for_a_gaussian_pool():
         assert abs(count / 8000 - 0.05) <= 4.5 * math.sqrt(0.05 * 0.95 / 8000), key
 
 
+def test_redrawn_control_families_match_the_chi_square_reference_for_a_gaussian_pool():
+    pool = np.random.default_rng(10).normal(size=20_000)
+    counts, squares = diagnostics.resampled_controls(pool, [10, 20, 40], 6000,
+                                                     np.random.default_rng(11))
+    # Three independent nominal-size controls: 0.15 expected rejections, chi-square(3) sums.
+    assert abs(counts.mean() - 0.15) <= 4.5 * math.sqrt(0.1425 / 6000)
+    assert abs(squares.mean() - 3.0) <= 4.5 * math.sqrt(6.0 / 6000)
+    assert abs(np.mean(squares >= stats.chi2.isf(0.05, 3)) - 0.05) <= 4.5 * math.sqrt(
+        0.0475 / 6000)
+
+
 def test_pair_pvalues_reports_undefined_tests_as_none():
     pvalues = diagnostics.pair_pvalues(np.full(3, 2.0), np.full(3, 2.0), np.random.default_rng(6))
     assert pvalues["welch"] == 1.0 and pvalues["permutation"] == 1.0
     assert pvalues["student"] is None and pvalues["yuen"] is None
+
+
+def test_tied_constant_arms_of_three_can_reject_with_the_asymptotic_mann_whitney():
+    rng = np.random.default_rng(9)
+    pvalues = diagnostics.pair_pvalues(np.zeros(3), np.ones(3), rng)
+    assert pvalues["mann_whitney"] == pytest.approx(0.0468541776, rel=1e-9)
+    # The exact permutation p-value of the same arms is 2/20.
+    assert pvalues["permutation"] == pytest.approx(0.1, abs=4.5 * math.sqrt(0.09 / 4000))
+
+
+@pytest.mark.parametrize("n", [2, 3])
+def test_mann_whitney_rejects_tiny_arms_only_when_both_are_constant_and_different(n):
+    # Ranks 0..2n-1 cover every order and tie pattern of 2n values.
+    values = np.array(list(product(range(2 * n), repeat=2 * n)), float)
+    a, b = values[:, :n], values[:, n:]
+    pvalues = stats.mannwhitneyu(a, b, axis=1, alternative="two-sided", method="asymptotic").pvalue
+    rejected = np.nan_to_num(pvalues, nan=1.0) < 0.05
+    constant = (a == a[:, :1]).all(axis=1) & (b == b[:, :1]).all(axis=1) & (a[:, 0] != b[:, 0])
+    assert not (rejected & ~constant).any()
+    assert rejected[constant].all() == (n == 3)
 
 
 def test_anova_matches_scipy_and_estimates_a_known_block_share():
