@@ -1,6 +1,6 @@
 # Null-control diagnostics for the neural PPO confirmation
 
-`scripts/null_diagnostics.py` writes this report, [null_diagnostics.json](null_diagnostics.json) and the [figure](../../figures/null_controls.svg) from the committed raw roots; `--check` regenerates all three and compares them with the committed files. Observed outcomes and root scores are measurements. Test sizes at the planned counts come from resampling committed base roots that the null controls did not use, which is not new training. The detection probability for a block effect is a simulation (SIM). I chose these checks after I saw the CartPole excess, so every p-value here is exploratory and unadjusted unless I say otherwise.
+`scripts/null_diagnostics.py` writes this report, [null_diagnostics.json](null_diagnostics.json) and the [figure](../../figures/null_controls.svg) from the saved PPO scores; `--check` regenerates all three and compares them with the saved files. I estimated rejection rates at the planned seed counts by resampling base-PPO policies that the null controls didn't use. I also simulated how often the block-effect test would detect a shared shift. I chose these checks after I saw the CartPole excess, so every p-value here is exploratory and unadjusted unless I say otherwise.
 
 ## Summary
 

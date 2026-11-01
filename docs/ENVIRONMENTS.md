@@ -1,10 +1,10 @@
 # Batch environments
 
-I adapt `src/seed_power/vector_env.py` from
+The NumPy batch implementation in `src/seed_power/vector_env.py` comes from
 [coldstart](https://github.com/mottopanikeiku/coldstart/blob/ee9c303de8e7698ca25569fc585e173e3e172bb8/control_clock/vector_env.py)
 (MIT, copyright 2026 Alp Cetin). It batches the default CartPole-v1 and
 Acrobot-v1 dynamics from Gymnasium 1.2.1. Both training and evaluation use
-these batches; `GymnasiumBatch` is the slow independent reference in tests.
+these batches; tests compare them with `GymnasiumBatch`, the Gymnasium reference.
 
 ## Interface and episode handling
 
@@ -16,13 +16,13 @@ these batches; `GymnasiumBatch` is the slow independent reference in tests.
   returns `(observations, rewards, terminated, truncated)`. Observations have
   shape `(num_envs, observation_size)` and dtype `float32`; flags are boolean.
 - `reset_done(mask, seeds)` takes a boolean mask of shape `(num_envs,)` and
-  **one seed per selected slot**, in ascending slot-index order. It returns the
+  one seed per selected slot, in ascending slot-index order. It returns the
   full updated observation batch. Unselected state and elapsed counters are
   unchanged. An empty selection accepts `[]` and changes nothing. Selected
   slots need not already be done, allowing explicit episode restarts.
 - `close()` releases Gymnasium environments and prevents subsequent use.
 
-There is **no automatic reset**. The observation returned for a terminal or
+Resets are explicit. The observation returned for a terminal or
 truncated transition is the final observation, not the next episode's start.
 Returned observation arrays are snapshots, so a subsequent partial reset does
 not overwrite observations retained by a rollout buffer. Training must reset
@@ -41,7 +41,7 @@ the selected counters and done status. Runtime validation rejects wrong action
 shapes, noninteger/out-of-range actions, invalid mask shapes/dtypes and seed
 lists with incorrect lengths or invalid elements.
 
-## Numerical contract
+## Numerical precision
 
 Each classic-control reset draws four uniforms from a newly seeded
 `np.random.default_rng(seed)`, matching Gymnasium's PCG64 generator. CartPole
@@ -49,10 +49,10 @@ uses reset bounds `[-0.05, 0.05]`, its default explicit Euler integrator and
 float64 internal dynamics. Its default reward is one, including the transition
 that terminates the episode.
 
-Acrobot uses reset bounds `[-0.1, 0.1]`. An important upstream detail: Gymnasium
-rounds **the initial internal state to float32**. This implementation retains
-that rounding, then promotes the state to float64. Its reset observation also
-uses float32 trigonometry, exactly as upstream; later observations are rounded
+Acrobot uses reset bounds `[-0.1, 0.1]`. Gymnasium rounds the initial internal
+state to float32. This implementation keeps that rounding, then promotes the
+state to float64. Its reset observation also uses float32 trigonometry, matching
+Gymnasium; later observations are rounded
 from float64 dynamics. Each action applies torque `-1`, `0` or `1`; the default
 "book" equations use a single RK4 step of duration `0.2`. After integration,
 angles are wrapped into inclusive `[-pi, pi]` (both endpoints are retained),
@@ -62,11 +62,11 @@ The nondefault NIPS equations, torque noise and custom reset bounds are not
 supported by this API.
 
 The fixed observation and internal-state comparison is `numpy.testing.assert_allclose` with
-**`atol=2e-6`, `rtol=2e-7`**. This permits float32 output rounding and small
+`atol=2e-6`, `rtol=2e-7`. This permits float32 output rounding and small
 scalar-versus-array ufunc differences without feeding rounded observations
 back into the integrator. The maximum permitted discrepancy is
 `2e-6 + 2e-7 * abs(reference_value)`; at Acrobot's largest velocity it is
-under `8e-6`. Rewards, termination and truncation flags are compared **exactly**;
+under `8e-6`. Rewards, termination and truncation flags are compared exactly;
 there is no tolerance for decisions or episode lengths.
 
 `tests/test_training.py` compares seeded batch transitions with independent
@@ -89,8 +89,8 @@ from the following pinned primary sources:
 Gymnasium is MIT-licensed. Its Acrobot source additionally credits the RLPy
 implementation under BSD-3-Clause: Alborz Geramifard, Robert H. Klein,
 Christoph Dann, William Dabney and Jonathan P. How; author Christoph Dann.
-Both notices are retained below. The batch layout and explicit-reset interface
-come from coldstart; I reuse them rather than claiming new dynamics.
+The notices are included here. The batch layout and explicit-reset interface
+come from coldstart.
 
 ### Gymnasium MIT notice
 

@@ -1,15 +1,29 @@
-# Pilot-to-fresh-seed calibration
+# Affine policy-search experiment
 
-I fix the tasks, optimizer variants and seed allocation in [design.json](../configs/design.json) before the rate-measurement run. There are six non-null comparisons and one same-variant null control on each of CartPole-v1 and Acrobot-v1. I repeat each cell twelve times with disjoint pilots. No comparison is selected because its pilot is significant, and no hyperparameter changes after inspecting the pilot.
+I compared ARS and CEM seed budgets on CartPole-v1 and Acrobot-v1. The [design](../configs/design.json) fixes six different-variant comparisons and one same-variant control per task, each repeated twelve times with disjoint pilots. Comparisons and hyperparameters stay fixed throughout the experiment.
 
-Each arm has eight pilot training seeds. Each score is the mean of sixteen complete evaluation episodes, with reset randomness separate from optimization and training resets. Evaluation episodes are measurements of one trained policy, not additional independent training seeds. The policy is an affine deterministic argmax controller. ARS uses 32 candidates, 0.5 perturbations, learning rate 0.2 and the top eight directions; CEM uses 32 candidates, four elites, smoothing 0.5 and minimum standard deviation 0.05. Iteration counts are two, four or eight. Training horizon differs because episodes end at different times; I compare these variants, not equal-environment-step learning efficiency.
+## Policies and pilots
 
-For each pilot I calculate its observed mean difference and two unbiased sample variances. I find the smallest equal per-arm seed count giving at least 80% two-sided noncentral-t power at alpha 0.05, with a Welch-Satterthwaite degrees-of-freedom approximation. This ignores estimation uncertainty in the pilot; testing that omission prospectively is the point. With equal variances and Gaussian scores, the calculation is exact for a pooled Student t test. The actual Welch test uses random sample-based degrees of freedom, so this fixed-df planner is approximate even when the population variances match.
+Policies use an affine map from observations to deterministic argmax actions. ARS uses 32 candidates, perturbation scale 0.5, learning rate 0.2 and the top eight directions. CEM uses 32 candidates, four elites, smoothing 0.5 and minimum standard deviation 0.05. Variants train for two, four or eight iterations.
 
-Zero pilot gaps or zero total pilot variances have no usable plan. Counts above 256 per arm exceed the predeclared executable budget. I preserve every such cell and the uncapped required count, but do not replace the count with 256 and call it an 80% plan. My achieved-detection denominator contains all executable non-null plans, including plans from nonsignificant pilots. This conditional denominator and its eligibility fraction are part of the result.
+Each arm has eight pilot training seeds. Each score averages sixteen complete evaluation episodes, with reset randomness separate from training and optimization. Evaluation episodes measure a single trained policy. Training transition counts vary with episode length.
 
-After the complete pilot, I write `results/pilot_plan.json`, commit and push it before any confirmation seed runs. Confirmation uses precisely the number of fresh seeds requested in each executable plan; pilot scores never enter the final test. The runner requires the committed plan and design to match its files and records the hash. I report marginal two-sided Welch detections (`p < 0.05`), direction reversals, Wilson 95% intervals, per-comparison outcomes and same-variant null controls separately. Individual tests are not multiplicity-corrected because I estimate marginal detection frequency rather than declaring a list of discovered improvements.
+## Choosing confirmation counts
 
-Different variant comparisons are not guaranteed alternatives: their true mean gaps may be zero. The pooled number is detection frequency for the fixed set, not power at one known population effect or a survey of all RL. Independent repeats quantify variability in this fixed procedure. Gaussian power can miscalibrate for bounded, skewed or ceiling-heavy RL returns. A failed target can come from pilot error, distribution assumptions, a null comparison or their combination; this experiment does not uniquely identify the cause.
+For each pilot, I calculate the mean gap and two unbiased sample variances, then find the smallest equal per-arm count giving at least 80% modeled power at two-sided alpha 0.05. The noncentral-t planner uses Welch–Satterthwaite degrees of freedom fixed at the pilot variances. Under equal-variance Gaussian scores this gives exact pooled-t power; Welch's sample-based degrees of freedom make it approximate for the actual test.
 
-Development runs measure cloud throughput only, on a separate seed range. They are not confirmation data. Raw records retain every evaluation return, root seed and configuration; environment files record cloud CPU, software and numerical threads. Cost is an upper-bound estimate from allocated cores, memory and cloud app wall time, not an audited invoice. I make no laptop timing claims.
+A zero gap or zero total variance gives no plan. Counts above 256 per arm exceed the experiment's budget. The [pilot plan](../results/pilot_plan.json) includes those cases and their uncapped counts. The detection-rate denominator includes every executable different-variant plan, whether or not its pilot was significant.
+
+The pilot plan was saved before confirmation. Each executable plan received exactly its requested number of new training seeds, with pilot scores excluded from the final test. The runner checks the plan and design against their saved revision.
+
+## Analysis
+
+The [summary](../results/summary.json) reports 67/119 detections (56.3%), using two-sided Welch tests at `p < 0.05`. It includes direction reversals, per-comparison rates, eligibility and Wilson 95% intervals, with same-variant controls reported separately. Individual tests are unadjusted because the outcome is marginal detection frequency.
+
+Development runs measured cloud throughput on separate seeds. Score files include every evaluation return, training seed and configuration. Environment files include software, CPU allocation and numerical thread counts. [Running instructions](RUNNING.md) explain how to recompute the analysis or repeat training.
+
+## Interpretation
+
+- Different variants can have zero or small true mean gaps. The pooled detection rate mixes these unknown effects.
+- The planner ignores pilot estimation uncertainty. Bounded, skewed and ceiling-heavy scores can also disagree with the Gaussian model; this experiment cannot separate those causes.
+- The design compares short-budget affine policy-search variants. Training horizons vary, so the results do not rank equal-step learning efficiency.

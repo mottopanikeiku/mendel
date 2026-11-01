@@ -1,18 +1,26 @@
 # Seed-planning calibration report
 
-`uv run python scripts/calibrate.py` writes this file, the tables beside it and `figures/known_truth.svg`. Rows marked SIM are simulations with known truth. Rows marked resampling reuse committed PPO root scores; they train nothing and are not new independent evidence.
+Choose the smallest effect worth detecting before the pilot, then use the pilot to estimate variance. Allowing for uncertainty in that variance kept power near the target across the simulated populations.
 
-## Recommendation
+## Recommended rule
 
-I chose the rule from the SIM tables alone. The committed-root resampling below is a check on that choice and did not change it.
+Use `variance_nct` (Fixed effect, noncentral-t (Julious-Owen)). It was the cheapest rule to reach 78.0% power in all four populations at every pilot size. Its power ranged from 79.3–83.3%. The selection uses simulation results; resampling PPO scores is a separate check.
 
-1. Fix the smallest effect you care about before running the pilot, and plan from that effect, not from the pilot's mean gap. Planning from the observed pilot gap gave 36.3–80.5% power when the true effect equalled the meaningful one, and put 25.0–68.0% of null pilots above 512 seeds per arm (SIM).
-2. Then plan with `variance_nct` (Fixed effect, noncentral-t (Julious-Owen)). It was the cheapest rule whose power stayed at or above 78.0% in all four SIM populations at all four pilot sizes. Its power ranged 79.3–83.3% over all populations and pilot sizes. Among the other fixed-effect rules, `fixed_effect` held at pilot sizes 32, 64 and used 0.95 times the seeds on average; `variance_ucl` held at every pilot size and used 1.16 times the seeds on average. "Held" compares simulated point estimates with 78.0%; it does not show that a rule's true power is above that line. This call is within a 95% Monte Carlo half-width of the line: `fixed_effect` at 32 pilot seeds, Gaussian, treatment SD x2: 78.0% ± 0.7. The closest call for `variance_nct` is 3.2 Monte Carlo SEs above the line.
-3. If the true effect is only half the one you planned for, no rule rescues the study: the fixed-effect rules gave 28.4–41.3% power (SIM).
-4. The Welch test, not the planning rule, decides the false-positive rate. With identical null arms the fixed-effect rules rejected 4.7–5.4%. When the two arms had equal means but different shapes (one bimodal with a failure mode, one unimodal), they rejected 5.3–6.8% (SIM, nominal 5%).
-5. On resampled committed PPO roots, `variance_nct` gave 80.5–82.6% power when I shifted one base arm by its planned effect, and rejected 4.5–5.3% of base-versus-base nulls, across both tasks and all pilot sizes. This is resampling of existing roots, not fresh training.
+Planning from the observed pilot gap gave 36.3–80.5% power at the target effect. With a true gap of zero, 25.0–68.0% of its pilots needed more than 512 seeds per arm.
 
-Power at the meaningful effect, lowest to highest over the four SIM populations, with mean total seeds (both arms, including the pilot) in brackets:
+Among the other fixed-effect rules, `fixed_effect` reached the threshold with pilots of 32, 64 seeds per arm and used 0.95 times as many seeds on average; `variance_ucl` reached the threshold at every pilot size and used 1.16 times as many seeds on average.
+
+Selection uses point estimates of power and a 78.0% threshold. One 95% Monte Carlo interval crosses it: `fixed_effect` at 32 pilot seeds, Gaussian, treatment SD x2: 78.0% ± 0.7. The closest estimate for `variance_nct` is 3.2 Monte Carlo SEs above the threshold.
+
+## Other findings
+
+- When the true effect was half the planned effect, the fixed-effect rules gave 28.4–41.3% power.
+- With identical null arms, the fixed-effect rules rejected 4.7–5.4%. Equal-mean arms with different shapes, one bimodal and one unimodal, raised this to 5.3–6.8% at a nominal 5% test size.
+- On resampled PPO scores, `variance_nct` gave 80.5–82.6% power after shifting one base arm by the planned effect. It rejected 4.5–5.3% of base-versus-base nulls across both tasks and all pilot sizes.
+
+## Pilot size and cost
+
+Power ranges cover the four simulated populations at the target effect. Parentheses give mean total seeds, including both arms and the pilot.
 
 | Pilot seeds per arm | Fixed effect, pilot variance | Fixed effect, noncentral-t (Julious-Owen) | Fixed effect, 80% variance UCL |
 |---:|---:|---:|---:|
@@ -21,11 +29,11 @@ Power at the meaningful effect, lowest to highest over the four SIM populations,
 | 32 | 78.0–80.6% (231) | 79.7–82.6% (236) | 84.8–88.0% (264) |
 | 64 | 78.9–81.8% (296) | 79.8–82.5% (298) | 83.8–87.3% (318) |
 
-The known-variance oracle gave 79.6–83.3% at the same effect, so even perfect variance knowledge does not give exactly 80% outside the Gaussian model. `uv run python scripts/plan.py --effect E --sd-a A --sd-b B --pilot-seeds N` applies the recommended rule to your own pilot SDs.
+Using the true variance gave 79.6–83.3% power at the same effect. `uv run python scripts/plan.py --effect E --sd-a A --sd-b B --pilot-seeds N` applies the recommended rule to pilot SDs.
 
-## Power at the meaningful effect (SIM)
+## Power at the meaningful effect
 
-Workflow power counts plans above the cap as misses. Ranges run over the four populations; per-population values with Monte Carlo errors are in `workflow.csv`.
+Power includes plans above the cap as misses. Ranges cover the four simulated populations; [workflow.csv](workflow.csv) contains per-population values and Monte Carlo errors.
 
 | Planning rule | 8-seed pilot: power | total seeds | 32-seed pilot: power | total seeds |
 |---|---:|---:|---:|---:|
@@ -54,9 +62,9 @@ Workflow power counts plans above the cap as misses. Ranges run over the four po
 | Failure/success bimodal | 32 | 75.3% ± 1.2 (173) | 80.6% ± 0.7 (144) | 88.0% ± 0.6 (161) | 82.6% ± 0.7 (147) | 82.3% ± 0.6 (144) |
 | Failure/success bimodal | 64 | 80.5% ± 0.9 (229) | 81.8% ± 0.6 (208) | 87.3% ± 0.6 (220) | 82.5% ± 0.6 (209) | 82.3% ± 0.6 (208) |
 
-Each cell is workflow power ± a 95% Monte Carlo half-width, then mean total seeds.
+Entries give power ± a 95% Monte Carlo half-width, then mean total seeds.
 
-## Null rejection (SIM)
+## False-positive rates
 
 | Population | Pilot | `observed_gap` | `fixed_effect` | `variance_ucl` | `variance_nct` | `known_variance` |
 |---|---:|---:|---:|---:|---:|---:|
@@ -89,9 +97,9 @@ For equal-variance Gaussian arms I compute every rule's plan distribution, power
 
 The quadrature has numerical error, which I report separately from Monte Carlo error (`*_numerical_error` columns). I estimate it as the change in each exact value when the nodes double from 48 to 96; tests check that this estimate bounds the error against an independent adaptive integration. For fixed-count Welch rejection it is at most 3.3e-05 at 2 seeds per arm, where each sample variance has one degree of freedom, and at most 5.3e-10 from 3 seeds on. For workflow power and eligibility it is below 1e-10, and for mean total seeds below 1e-10 seeds. The smallest Monte Carlo SE of workflow power in those rows is 0.0011. Every check above allows 4.5 Monte Carlo SEs plus the numerical error.
 
-## Committed PPO roots, resampled
+## Resampling PPO scores
 
-Each task/variant pool of committed pilot and confirmation roots is split 4 times into disjoint halves. Each half is a finite population with an exactly known gap. Every replicate draws a pilot and then a confirmation without replacement, so no root is in both. `null` compares base with base; `shift` adds half the base SD to one arm's roots, a known effect on real score shapes; the other rows are the committed variant pairs, planned at their own population gap. SE combines Monte Carlo and finite-pool (delete-half jackknife) error.
+Each task/variant pool of pilot and confirmation scores is split 4 times into disjoint halves. Each half has a known mean gap. Replicates draw a pilot and confirmation without replacement, so each trained policy appears in only one arm and phase per replicate. `null` compares base with base; `shift` adds half the base SD to one arm; variant pairs use their half-population's mean gap as the target. Standard errors combine Monte Carlo and delete-half jackknife estimates.
 
 | Task | Comparison | Gap | Pilot | `observed_gap` | `fixed_effect` | `variance_ucl` | `variance_nct` | `known_variance` |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -120,13 +128,13 @@ Each task/variant pool of committed pilot and confirmation roots is split 4 time
 | Acrobot-v1 | base vs no_entropy | -3.4 | 8 | 3.1% ± 0.5 (72.2% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) |
 | Acrobot-v1 | base vs no_entropy | -3.4 | 32 | 2.2% ± 1.1 (48.4% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) | 0.0% ± 0.0 (0.0% run) |
 
-Each cell is workflow rejection ± a 95% half-width, then the fraction of plans run. Gaps are mean(a) − mean(b) averaged over the half populations. Variant pairs are planned at each half population's own gap, which moves with finite-pool noise. Near the 512-seed cap that decides whether a plan runs at all, so those rows carry large finite-pool errors, and rules that inflate the variance push more plans over the cap. The fixed-effect rules ran under 1% of plans for CartPole-v1 base vs no_entropy, Acrobot-v1 base vs lr_slow, Acrobot-v1 base vs no_entropy: under the noncentral-t planning model, the finite-population gaps of these pairs need far more than 512 seeds per arm.
+Entries give rejection frequency ± a 95% half-width, followed by the fraction of plans run. Gaps are mean(a) − mean(b), averaged over half-populations. Variation between halves can move a plan across the 512-seed cap, giving large finite-pool errors. Variance inflation pushes more plans over the cap. Fixed-effect rules ran fewer than 1% of plans for CartPole-v1 base vs no_entropy, Acrobot-v1 base vs lr_slow, Acrobot-v1 base vs no_entropy; these gaps require more than 512 seeds per arm.
 
-## Fresh training versus resampling
+## Training results versus resampling
 
-The committed fresh-seed experiment planned from 8-seed pilots with the observed gap. Resampling the same rule from the committed roots should give similar detection rates if the roots are a fair stand-in for new training. Fresh rates are MEAS; resampled rates are not new evidence.
+The PPO experiment used eight-seed pilots and the observed-gap rule. Applying the same rule to resampled scores gives this comparison:
 
-| Task | Comparison | Fresh: detected/run, Wilson 95% (run/planned) | Resampled: detected among run (run) |
+| Task | Comparison | Training: detected/run, Wilson 95% (run/planned) | Resampled: detected among run (run) |
 |---|---|---:|---:|
 | Acrobot-v1 | base vs base | 2/38 = 5.3%, 1.5–17.3% (38/50) | 5.6% (72.5%) |
 | Acrobot-v1 | base vs fewer_epochs | 14/32 = 43.8%, 28.2–60.7% (32/50) | 28.6% (73.2%) |
@@ -139,11 +147,13 @@ The committed fresh-seed experiment planned from 8-seed pilots with the observed
 | CartPole-v1 | base vs lr_slow | 47/50 = 94.0%, 83.8–97.9% (50/50) | 84.2% (100.0%) |
 | CartPole-v1 | base vs no_entropy | 1/35 = 2.9%, 0.5–14.5% (35/50) | 5.2% (72.6%) |
 
-The resampled rate falls inside the fresh Wilson interval for 9 of 10 comparisons; it falls outside for CartPole-v1 base vs base. Separate 95% intervals are not a joint test.
+The resampled rate falls inside the training result's Wilson interval for 9 of 10 comparisons; it falls outside for CartPole-v1 base vs base.
 
-## Limits
+## Limitations
 
-- SIM populations are stylized: two Gaussian, one bounded with a ceiling mass and one failure/success mixture, each with a meaningful effect of half the control SD. Other shapes, heavier tails or smaller effects can behave differently.
-- Every rule here plans for 80% power at one prespecified effect. None protects against choosing that effect badly.
-- Resampling reuses the same committed roots across replicates and conditions on the fixed evaluation reset sets. It shows how the rules behave on these PPO score distributions; it is not fresh training and adds no independent seeds.
-- Monte Carlo intervals are pointwise, not simultaneous across the grid.
+- The four simulated populations use one target effect, half the control SD. Other shapes, heavier tails or smaller effects may behave differently.
+- Power depends on the chosen target effect.
+- Resampling reuses trained policies across replicates and conditions on fixed evaluation resets. It does not add training seeds.
+- The intervals are pointwise; comparisons across them are not joint tests.
+
+`uv run python scripts/calibrate.py` generates this report, the adjacent tables and [figure](../../figures/known_truth.svg). [Method](../../docs/CALIBRATION.md).

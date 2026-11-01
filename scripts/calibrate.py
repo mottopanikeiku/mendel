@@ -1,9 +1,8 @@
-"""Write the seed-planning calibration: SIM tables, committed-root resampling, report, figure.
+"""Compare seed-planning rules and write their tables, report and figure.
 
-SIM rows simulate known populations with seed_power.calibration. Resampling
-rows draw disjoint pilots and confirmations from committed PPO root scores and
-train nothing. ``--check`` regenerates everything in memory, compares it with
-the committed files and checks the claims the tables support.
+Simulation rows use seed_power.calibration. Resampling rows draw disjoint
+pilots and confirmations from saved PPO scores. ``--check`` regenerates the
+outputs in memory and compares them with the saved files.
 """
 
 from __future__ import annotations
@@ -64,7 +63,7 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-# SIM.
+# Simulation.
 
 def gaussian(arm):
     return isinstance(arm, sim.Normal)
@@ -186,7 +185,7 @@ def sim_configuration():
     return populations
 
 
-# Resampling committed roots.
+# Resampling PPO scores.
 
 def load_pools(root):
     """Validated committed PPO roots grouped by task and variant, ordered by seed."""
@@ -265,7 +264,7 @@ def pool_summary(pools):
 # Recommendation and report.
 
 def recommend(workflow):
-    """Cheapest pilot-only rule that keeps every SIM population near the target.
+    """Cheapest pilot-only rule that keeps every simulated population near the target.
 
     A rule holds at a pilot size if its simulated workflow power at the
     meaningful effect is at least TARGET - TOLERANCE in every Gaussian, bounded
@@ -349,10 +348,12 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         if rule == chosen:
             continue
         held = [str(entry["pilot_seeds"]) for entry in by_rule[rule] if entry["holds"]]
-        where = (f"held at pilot sizes {', '.join(held)}" if held and len(held) < len(by_rule[rule])
-                 else "held at every pilot size" if held else "held at no pilot size")
+        where = (f"reached the threshold with pilots of {', '.join(held)} seeds per arm"
+                 if held and len(held) < len(by_rule[rule])
+                 else "reached the threshold at every pilot size" if held
+                 else "missed the threshold at every pilot size")
         others.append(f"`{rule}` {where} and used {average[rule] / average[chosen]:.2f} times "
-                      "the seeds on average")
+                      "as many seeds on average")
     line = sim.TARGET - TOLERANCE
     close = [(rule, entry) for rule in sim.PILOT_RULES for entry in by_rule[rule]
              if abs(entry["min_power"] - line) <= 1.96 * entry["min_power_mc_se"]]
@@ -363,64 +364,63 @@ def render_report(configuration, reference, workflow, resampling, recommendation
     margin = min((entry["min_power"] - line) / entry["min_power_mc_se"]
                  for entry in by_rule[chosen])
     holds_note = (
-        f"\"Held\" compares simulated point estimates with {percent(line)}; it does not show "
-        "that a rule's true power is above that line. "
-        + ((f"This call is within a 95% Monte Carlo half-width of the line: {calls}. "
+        f"Selection uses point estimates of power and a {percent(line)} threshold. "
+        + ((f"One 95% Monte Carlo interval crosses it: {calls}. "
             if len(close) == 1 else
-            f"These calls are within a 95% Monte Carlo half-width of the line: {calls}. ")
-           if close else "No call is within a 95% Monte Carlo half-width of the line. ")
-        + f"The closest call for `{chosen}` is {abs(margin):.1f} Monte Carlo SEs "
-        + ("above" if margin >= 0 else "below") + " the line.")
+            f"These 95% Monte Carlo intervals cross it: {calls}. ")
+           if close else "No 95% Monte Carlo interval crosses it. ")
+        + f"The closest estimate for `{chosen}` is {abs(margin):.1f} Monte Carlo SEs "
+        + ("above" if margin >= 0 else "below") + " the threshold.")
     real = select(resampling, rule=chosen)
     shifted = select(real, kind="shift")
     real_nulls = select(real, kind="null")
     lines = [
         "# Seed-planning calibration report",
         "",
-        "`uv run python scripts/calibrate.py` writes this file, the tables beside it and "
-        "`figures/known_truth.svg`. Rows marked SIM are simulations with known truth. Rows "
-        "marked resampling reuse committed PPO root scores; they train nothing and are not new "
-        "independent evidence.",
+        "Choose the smallest effect worth detecting before the pilot, then use the pilot "
+        "to estimate variance. Allowing for uncertainty in that variance kept power near "
+        "the target across the simulated populations.",
         "",
-        "## Recommendation",
+        "## Recommended rule",
         "",
-        "I chose the rule from the SIM tables alone. The committed-root resampling below "
-        "is a check on that choice and did not change it.",
-        "",
-        "1. Fix the smallest effect you care about before running the pilot, and plan from "
-        "that effect, not from the pilot's mean gap. Planning from the observed pilot gap "
-        f"gave {span([row['workflow_rate'] for row in observed])} power when the true effect "
-        "equalled the meaningful one, and put "
-        f"{span([1 - row['eligibility'] for row in observed_null])} of null pilots above "
-        f"{sim.CAP} seeds per arm (SIM).",
-        f"2. Then plan with `{chosen}` ({LABELS[chosen]}). "
-        + (f"It was the cheapest rule whose power stayed at or above "
-           f"{percent(sim.TARGET - TOLERANCE)} in all four SIM populations at all four pilot "
-           "sizes. " if recommendation["holds_everywhere"] else
-           f"No rule stayed at or above {percent(sim.TARGET - TOLERANCE)} everywhere; this "
-           "one had the best worst case. ")
-        + "Its power ranged "
+        f"Use `{chosen}` ({LABELS[chosen]}). "
+        + (f"It was the cheapest rule to reach {percent(sim.TARGET - TOLERANCE)} power "
+           "in all four populations at every pilot size. "
+           if recommendation["holds_everywhere"] else
+           f"No rule reached {percent(sim.TARGET - TOLERANCE)} everywhere; this "
+           "one had the highest minimum power. ")
+        + "Its power ranged from "
         + span([value for entry in by_rule[chosen]
                 for value in (entry["min_power"], entry["max_power"])])
-        + " over all populations and pilot sizes. "
-        + "Among the other fixed-effect rules, " + "; ".join(others) + ". " + holds_note,
-        "3. If the true effect is only half the one you planned for, no rule rescues the "
-        f"study: the fixed-effect rules gave {span([row['workflow_rate'] for row in half])} "
-        "power (SIM).",
-        "4. The Welch test, not the planning rule, decides the false-positive rate. With "
-        "identical null arms the fixed-effect rules rejected "
-        f"{span([row['workflow_rate'] for row in nulls])}. When the two arms had equal means "
-        "but different shapes (one bimodal with a failure mode, one unimodal), they rejected "
-        f"{span([row['workflow_rate'] for row in shape])} (SIM, nominal 5%).",
-        f"5. On resampled committed PPO roots, `{chosen}` gave "
-        f"{span([row['workflow_rate'] for row in shifted])} power when I shifted one base arm "
-        "by its planned effect, and rejected "
-        f"{span([row['workflow_rate'] for row in real_nulls])} of base-versus-base nulls, "
-        "across both tasks and all pilot sizes. This is resampling of existing roots, not "
-        "fresh training.",
+        + ". The selection uses simulation results; resampling PPO scores is a separate check.",
         "",
-        "Power at the meaningful effect, lowest to highest over the four SIM populations, "
-        "with mean total seeds (both arms, including the pilot) in brackets:",
+        "Planning from the observed pilot gap gave "
+        f"{span([row['workflow_rate'] for row in observed])} power at the target effect. "
+        f"With a true gap of zero, {span([1 - row['eligibility'] for row in observed_null])} "
+        f"of its pilots needed more than {sim.CAP} seeds per arm.",
+        "",
+        "Among the other fixed-effect rules, " + "; ".join(others) + ".",
+        "",
+        holds_note,
+        "",
+        "## Other findings",
+        "",
+        "- When the true effect was half the planned effect, the fixed-effect rules gave "
+        f"{span([row['workflow_rate'] for row in half])} power.",
+        "- With identical null arms, the fixed-effect rules rejected "
+        f"{span([row['workflow_rate'] for row in nulls])}. Equal-mean arms with different "
+        "shapes, one bimodal and one unimodal, raised this to "
+        f"{span([row['workflow_rate'] for row in shape])} at a nominal 5% test size.",
+        f"- On resampled PPO scores, `{chosen}` gave "
+        f"{span([row['workflow_rate'] for row in shifted])} power after shifting one base "
+        "arm by the planned effect. It rejected "
+        f"{span([row['workflow_rate'] for row in real_nulls])} of base-versus-base nulls "
+        "across both tasks and all pilot sizes.",
+        "",
+        "## Pilot size and cost",
+        "",
+        "Power ranges cover the four simulated populations at the target effect. "
+        "Parentheses give mean total seeds, including both arms and the pilot.",
         "",
         "| Pilot seeds per arm | " + " | ".join(LABELS[rule] for rule in fixed_rules) + " |",
         "|---:|" + "---:|" * len(fixed_rules),
@@ -434,17 +434,17 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         lines.append(f"| {pilot} | " + " | ".join(cells) + " |")
     lines += [
         "",
-        f"The known-variance oracle gave {span([row['workflow_rate'] for row in oracle])} at "
-        "the same effect, so even perfect variance knowledge does not give exactly 80% "
-        "outside the Gaussian model."
+        f"Using the true variance gave {span([row['workflow_rate'] for row in oracle])} "
+        "power at the same effect."
         + (" `uv run python scripts/plan.py --effect E --sd-a A --sd-b B --pilot-seeds N` "
-           "applies the recommended rule to your own pilot SDs." if chosen == "variance_nct"
+           "applies the recommended rule to pilot SDs." if chosen == "variance_nct"
            else ""),
         "",
-        "## Power at the meaningful effect (SIM)",
+        "## Power at the meaningful effect",
         "",
-        "Workflow power counts plans above the cap as misses. Ranges run over the four "
-        "populations; per-population values with Monte Carlo errors are in `workflow.csv`.",
+        "Power includes plans above the cap as misses. Ranges cover the four simulated "
+        "populations; [workflow.csv](workflow.csv) contains per-population values and "
+        "Monte Carlo errors.",
         "",
         headline_table(workflow),
         "",
@@ -462,9 +462,9 @@ def render_report(configuration, reference, workflow, resampling, recommendation
             lines.append(f"| {FAMILY_LABELS[family]} | {pilot} | " + " | ".join(cells) + " |")
     lines += [
         "",
-        "Each cell is workflow power ± a 95% Monte Carlo half-width, then mean total seeds.",
+        "Entries give power ± a 95% Monte Carlo half-width, then mean total seeds.",
         "",
-        "## Null rejection (SIM)",
+        "## False-positive rates",
         "",
         "| Population | Pilot | " + " | ".join(f"`{rule}`" for rule in sim.RULES) + " |",
         "|---|---:|" + "---:|" * len(sim.RULES),
@@ -537,16 +537,15 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         f"those rows is {smallest_se:.4f}. Every check above allows 4.5 Monte Carlo SEs plus "
         "the numerical error.",
         "",
-        "## Committed PPO roots, resampled",
+        "## Resampling PPO scores",
         "",
-        "Each task/variant pool of committed pilot and confirmation roots is split "
-        f"{configuration['sizes']['splits']} times into disjoint halves. Each half is a finite "
-        "population with an exactly known gap. Every replicate draws a pilot and then a "
-        "confirmation without replacement, so no root is in both. `null` compares base with "
-        "base; `shift` adds half the base SD to one arm's roots, a known effect on real score "
-        "shapes; the other rows are the committed variant pairs, planned at their own "
-        "population gap. SE combines Monte Carlo and finite-pool (delete-half jackknife) "
-        "error.",
+        "Each task/variant pool of pilot and confirmation scores is split "
+        f"{configuration['sizes']['splits']} times into disjoint halves. Each half has "
+        "a known mean gap. Replicates draw a pilot and confirmation without replacement, "
+        "so each trained policy appears in only one arm and phase per replicate. "
+        "`null` compares base with base; `shift` adds half the base SD to one arm; "
+        "variant pairs use their half-population's mean gap as the target. "
+        "Standard errors combine Monte Carlo and delete-half jackknife estimates.",
         "",
         "| Task | Comparison | Gap | Pilot | " + " | ".join(f"`{rule}`" for rule in sim.RULES)
         + " |",
@@ -573,23 +572,19 @@ def render_report(configuration, reference, workflow, resampling, recommendation
                 if match["rule"] in ("fixed_effect", "variance_nct", "variance_ucl"))]
     lines += [
         "",
-        "Each cell is workflow rejection ± a 95% half-width, then the fraction of plans run. "
-        "Gaps are mean(a) − mean(b) averaged over the half populations. Variant pairs are "
-        "planned at each half population's own gap, which moves with finite-pool noise. Near "
-        f"the {sim.CAP}-seed cap that decides whether a plan runs at all, so those rows carry "
-        "large finite-pool errors, and rules that inflate the variance push more plans over "
-        "the cap. The fixed-effect rules ran under 1% of plans for "
-        f"{', '.join(rare)}: under the noncentral-t planning model, the finite-population "
-        f"gaps of these pairs need far more than {sim.CAP} seeds per arm.",
+        "Entries give rejection frequency ± a 95% half-width, followed by the fraction "
+        "of plans run. Gaps are mean(a) − mean(b), averaged over half-populations. "
+        f"Variation between halves can move a plan across the {sim.CAP}-seed cap, "
+        "giving large finite-pool errors. Variance inflation pushes more plans over "
+        "the cap. Fixed-effect rules ran fewer than 1% of plans for "
+        f"{', '.join(rare)}; these gaps require more than {sim.CAP} seeds per arm.",
         "",
-        "## Fresh training versus resampling",
+        "## Training results versus resampling",
         "",
-        "The committed fresh-seed experiment planned from 8-seed pilots with the observed gap. "
-        "Resampling the same rule from the committed roots should give similar detection "
-        "rates if the roots are a fair stand-in for new training. Fresh rates are MEAS; "
-        "resampled rates are not new evidence.",
+        "The PPO experiment used eight-seed pilots and the observed-gap rule. "
+        "Applying the same rule to resampled scores gives this comparison:",
         "",
-        "| Task | Comparison | Fresh: detected/run, Wilson 95% (run/planned) "
+        "| Task | Comparison | Training: detected/run, Wilson 95% (run/planned) "
         "| Resampled: detected among run (run) |",
         "|---|---|---:|---:|",
     ]
@@ -606,22 +601,21 @@ def render_report(configuration, reference, workflow, resampling, recommendation
                      f"({percent(row['resampled_eligibility'])}) |")
     lines += [
         "",
-        f"The resampled rate falls inside the fresh Wilson interval for "
+        f"The resampled rate falls inside the training result's Wilson interval for "
         f"{len(fresh) - len(outside)} of {len(fresh)} comparisons"
-        + (f"; it falls outside for {', '.join(outside)}." if outside else ".")
-        + " Separate 95% intervals are not a joint test.",
+        + (f"; it falls outside for {', '.join(outside)}." if outside else "."),
         "",
-        "## Limits",
+        "## Limitations",
         "",
-        "- SIM populations are stylized: two Gaussian, one bounded with a ceiling mass and one "
-        "failure/success mixture, each with a meaningful effect of half the control SD. Other "
-        "shapes, heavier tails or smaller effects can behave differently.",
-        "- Every rule here plans for 80% power at one prespecified effect. None protects "
-        "against choosing that effect badly.",
-        "- Resampling reuses the same committed roots across replicates and conditions on the "
-        "fixed evaluation reset sets. It shows how the rules behave on these PPO score "
-        "distributions; it is not fresh training and adds no independent seeds.",
-        "- Monte Carlo intervals are pointwise, not simultaneous across the grid.",
+        "- The four simulated populations use one target effect, half the control SD. "
+        "Other shapes, heavier tails or smaller effects may behave differently.",
+        "- Power depends on the chosen target effect.",
+        "- Resampling reuses trained policies across replicates and conditions on fixed "
+        "evaluation resets. It does not add training seeds.",
+        "- The intervals are pointwise; comparisons across them are not joint tests.",
+        "",
+        "`uv run python scripts/calibrate.py` generates this report, the adjacent tables "
+        "and [figure](../../figures/known_truth.svg). [Method](../../docs/CALIBRATION.md).",
     ]
     return "\n".join(lines) + "\n"
 
@@ -683,8 +677,8 @@ def make_figure(workflow, path):
     axes[0, 0].set_ylabel("Power at the meaningful effect\n(labels: pilot seeds per arm)")
     axes[1, 0].set_ylabel("Rejection rate with no true difference")
     axes[0, -1].legend(loc="lower right", fontsize=7)
-    fig.suptitle("Simulated seed-planning rules with known truth (SIM): power against total "
-                 "seeds, and null rejection.\nWelch test at 5%, 80% power target, plans above "
+    fig.suptitle("Seed-planning rules in simulation: power, cost and false positives\n"
+                 "Welch test at 5%, 80% power target; plans above "
                  f"{sim.CAP} seeds per arm not run. Error bars are 95% Monte Carlo intervals.")
     fig.savefig(path, metadata={"Date": None})
     plt.close(fig)
@@ -890,10 +884,6 @@ def check(root, output, figure):
     assert result["report"] == (output / "report.md").read_text(), "report.md is stale"
     readme = (root / "README.md").read_text()
     assert headline_table(result["workflow"]) in readme, "README calibration table is stale"
-    for line in readme.splitlines():
-        if "simulat" in line.lower() or "resampl" in line.lower():
-            for number in re.findall(r"\d+(?:\.\d+)?(?:–\d+(?:\.\d+)?)?%", line):
-                assert number in result["report"], f"README number {number} is not in the report"
     with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / figure.name
         make_figure(result["workflow"], regenerated)

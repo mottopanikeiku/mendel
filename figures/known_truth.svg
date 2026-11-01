@@ -3121,8 +3121,8 @@ L 884.931948 291.902322
    </g>
   </g>
   <g id="text_199">
-   <text style="font-size: 10.8px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(233.066813 11.206552)">Simulated seed-planning rules with known truth (SIM): power against total seeds, and null rejection.</text>
-   <text style="font-size: 10.8px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(180.777938 23.30019)">Welch test at 5%, 80% power target, plans above 512 seeds per arm not run. Error bars are 95% Monte Carlo intervals.</text>
+   <text style="font-size: 10.8px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(326.609156 11.206552)">Seed-planning rules in simulation: power, cost and false positives</text>
+   <text style="font-size: 10.8px; font-family: 'DejaVu Sans', 'Bitstream Vera Sans', 'Computer Modern Sans Serif', 'Lucida Grande', 'Verdana', 'Geneva', 'Lucid', 'Arial', 'Helvetica', 'Avant Garde', sans-serif" transform="translate(180.675 23.30019)">Welch test at 5%, 80% power target; plans above 512 seeds per arm not run. Error bars are 95% Monte Carlo intervals.</text>
   </g>
  </g>
  <defs>

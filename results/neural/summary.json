@@ -286,7 +286,7 @@
     }
   ],
   "alpha": 0.05,
-  "plan_commit": "260bebb4b1ab2d827ef06371b3681a0293f2b999",
+  "plan_commit": "59cc9168e36e584d91decb3c98739c6754b34ef5",
   "interval_interpretation": "Wilson 95% intervals are descriptive pooled summaries of heterogeneous fixed comparison detection rates, not confidence intervals for one shared power parameter.",
   "evaluation_reset_seeds": {
     "CartPole-v1": [

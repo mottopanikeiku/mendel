@@ -1,44 +1,38 @@
-# What I build on
+# Related work and attribution
 
-Seed-count planning in RL is not new. I add a small **prospective calibration test**: estimate a budget from pilot training runs, commit it, run fresh independent seeds, and measure detection frequency. An 80% calculation assumes a population effect, variance and score distribution that a small pilot cannot establish.
+Mendel compares established sample-size rules by running each from pilot to confirmation. The training experiments test budgets based on the observed pilot gap; the [simulation](CALIBRATION.md) compares that rule with fixed-effect alternatives.
 
-## Closest work
+## Seed planning and RL evaluation
 
-- **Henderson et al. (AAAI 2018), [Deep Reinforcement Learning that Matters](https://arxiv.org/pdf/1709.06560).** Their “Random Seeds and Trials”, reporting and supplemental significance sections document variability and use bootstrap power analysis with an artificial score lift. They motivate uncertainty reporting rather than a universal seed budget.
-- **Colas, Sigaud and Oudeyer (2018), [How Many Random Seeds?](https://arxiv.org/pdf/1806.08295v1), sections 3–5.** They already give statistical seed-count guidance, a pilot-to-additional-runs workflow, and examples of small-pilot and distributional failures. Merely calculating a count from a pilot is not new. My narrower extension is repeated prospective calibration with an explicitly committed plan and independent future training runs. I use established noncentral-t calculations with approximate Welch degrees of freedom, not a new power formula.
-- **Agarwal et al. (NeurIPS 2021), [Deep Reinforcement Learning at the Edge of the Statistical Precipice](https://arxiv.org/pdf/2108.13264), sections 2–4 and Appendix A, [rliable](https://github.com/google-research/rliable).** Stratified bootstrap intervals, IQM and performance profiles answer aggregate benchmark questions. Their Atari 100k analysis uses 100 training runs per game, each averaging 100 evaluation episodes. My per-task mean-return budgets are narrower and do not replace rliable's aggregate methods.
-- **Patterson et al., [Empirical Design in Reinforcement Learning](https://arxiv.org/pdf/2304.01315v1) (2023 preprint; [JMLR 2024](https://jmlr.org/papers/v25/23-0183.html)), sections 2–6.** Their experimental-unit, hyperparameter-selection and designer-bias discussion motivates fixed comparisons and separate pilots. Equal numeric seed labels do not establish a paired experiment. Evaluation episodes are not independent training runs.
-- **Albers and Lakens (2018), [When power analyses based on pilot data are biased](https://doi.org/10.1016/j.jesp.2017.09.004).** Pilot-effect misplanning is already known. A meaningful-effect target fixed in advance avoids estimating the target from a noisy pilot, but the pilot variance and model assumptions can still be wrong. My fresh-seed experiments test only the observed-gap rule. The [known-truth calibration](CALIBRATION.md) compares it with fixed-effect rules in simulation and on resampled committed roots; that is still not a prospective validation on newly trained seeds.
-- **Browne (1995), [On the use of a pilot sample for sample size determination](https://doi.org/10.1002/sim.4780141709); Julious and Owen (2006), [Sample size calculations for clinical studies allowing for uncertainty about the variance](https://pubmed.ncbi.nlm.nih.gov/17080926); [Whitehead et al. (2016)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4876429/).** Inflating a pilot variance for its own uncertainty is established practice in clinical trial planning. I adapt the 80% upper-confidence-limit and noncentral-t methods to Welch comparisons of training seeds and calibrate them; I do not propose a new method.
+- [Henderson et al., *Deep Reinforcement Learning that Matters* (2018)](https://arxiv.org/abs/1709.06560) document variability across seeds and use bootstrap power analysis with an artificial score lift.
+- [Colas, Sigaud and Oudeyer, *How Many Random Seeds?* (2018)](https://arxiv.org/abs/1806.08295) give seed-count guidance, a pilot-to-additional-runs workflow, and examples of small-pilot and distributional failures. Mendel repeats that workflow across separate pilots and new training runs.
+- [Agarwal et al., *Deep Reinforcement Learning at the Edge of the Statistical Precipice* (2021)](https://arxiv.org/abs/2108.13264) and [rliable](https://github.com/google-research/rliable) provide stratified bootstrap intervals, IQM and performance profiles for aggregate benchmarks. Mendel plans per-task mean-return comparisons.
+- [Patterson et al., *Empirical Design in Reinforcement Learning* (2024)](https://jmlr.org/papers/v25/23-0183.html) discuss experimental units, hyperparameter selection and designer bias. Equal numeric seed labels alone do not establish pairing; evaluation episodes measure a policy rather than add training replicates.
+- [Albers and Lakens, *When power analyses based on pilot data are biased* (2018)](https://doi.org/10.1016/j.jesp.2017.09.004) explain the bias from planning around pilot effect estimates.
 
-[Evaluation-Aware Reinforcement Learning (2025)](https://arxiv.org/abs/2509.19464) concerns training for more accurate policy evaluation, a different objective. A literature search cannot prove that prospective seed-budget calibration has never been studied. I claim an executable small replication and extension, not priority for a statistical idea.
+## Variance uncertainty
 
-I follow [rayleigh](https://github.com/mottopanikeiku/rayleigh)'s separation of historical calculations and new measurements. I adapt affine ARS/CEM and Gymnasium batches from [coldstart](https://github.com/mottopanikeiku/coldstart/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), MIT. [Environment notices](ENVIRONMENTS.md) retain Gymnasium MIT and Acrobot/RLPy BSD terms. These short-budget affine policies do not establish seed requirements for deep RL generally.
+[Browne (1995)](https://doi.org/10.1002/sim.4780141709) and [Julious and Owen (2006)](https://pubmed.ncbi.nlm.nih.gov/17080926) account for uncertainty in pilot variance estimates. Mendel adapts the 80% upper-confidence-limit and noncentral-t methods to Welch comparisons of training seeds. [Whitehead et al. (2016)](https://pmc.ncbi.nlm.nih.gov/articles/PMC4876429/) describe both methods and give the inflation tables reproduced by the tests.
 
-## Public data and permissions
+## Implementation sources
 
-The rliable Atari 100k route was unavailable on 2026-10-07. Anonymous requests to its [SPR object](https://storage.googleapis.com/rl-benchmark-data/atari_100k/SPR.json) and bucket listings returned HTTP 404; [issue 31](https://github.com/google-research/rliable/issues/31) records an earlier access problem. The code/notebook's Apache-2.0 license does not establish separate bucket-data terms. I import no unavailable Atari scores and make no Atari power claim.
+Affine ARS/CEM and the NumPy batch environments come from [coldstart](https://github.com/mottopanikeiku/coldstart/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), under MIT. The [environment documentation](ENVIRONMENTS.md) includes Gymnasium's MIT and Acrobot/RLPy's BSD notices.
 
-Instead I reanalyse my already-public MIT [coldstart release](https://github.com/mottopanikeiku/coldstart/tree/ee9c303de8e7698ca25569fc585e173e3e172bb8), not an external RL-paper survey. I import every final record linked by its pinned summary: 140 training runs, two tasks and five implementations. ARS, CEM and batched PPO have 20 runs per task; adapted CleanRL PPO and Zoo SB3 PPO have five. The source archive, every raw-record URL and SHA256, selection rule and license are in [public_sources.json](../data/public_sources.json). The importer verifies each last-evaluation score against its 100 raw episode returns.
+The neural experiment adapts [coldstart's JAX PPO](https://github.com/mottopanikeiku/coldstart/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py), under MIT. It follows [PureJaxRL](https://github.com/luchris429/purejaxrl)'s JAX/vmap/scan design, under Apache-2.0 ([license](../third_party/PureJaxRL-LICENSE)). I replaced qualification stopping with fixed transition budgets and one evaluation per policy in Gymnax.
 
-Those scores are last-evaluation means at stopping policies, not equal-training-budget outcomes. A shared fixed evaluation set is reused for stopping and evaluation, including qualification at initialization. Bounded, ceiling-heavy and qualification-selected scores make population extrapolation especially weak.
+## Historical score analysis
 
-I enumerate all ten unordered implementation pairs per task, with actual unequal allocation where applicable. In [public.json](../results/public.json), 19 of 20 are below 80% **plug-in model power for their observed gaps**. That is neither true power nor a significance result, and is not the fraction of all published RL comparisons. Dependent pairs receive no binomial interval. Illustrative equal-variance standardized effects 0.2, 0.5, 0.8 and 1.0 require 394, 64, 26 and 17 independent seeds per arm, respectively; [the table](../results/public_standardized.csv) records assumptions and achieved modeled power.
+The public-data analysis uses 140 training runs from the MIT coldstart release: two tasks and five implementations. ARS, CEM and batched PPO have 20 runs per task; adapted CleanRL PPO and Zoo SB3 PPO have five. The [source manifest](../data/public_sources.json) includes archive and raw-record hashes, selection rules and license information. The importer checks each final score against its 100 episode returns.
+
+I compare all ten unordered implementation pairs per task using their actual, sometimes unequal, counts. In [public.json](../results/public.json), 19/20 pairs have less than 80% plug-in model power for their observed gaps. The [standardized-effect table](../results/public_standardized.csv) gives 394, 64, 26 and 17 seeds per arm for effects of 0.2, 0.5, 0.8 and 1.0 SD under the equal-variance Gaussian model.
 
 ```sh
 uv run python scripts/import_public.py
 uv run python scripts/public_analysis.py
 ```
 
-## Neural PPO extension
+## Limits of the historical data
 
-I extend the same prospective question to small neural policies. I adapt
-[coldstart's JAX PPO](https://github.com/mottopanikeiku/coldstart/blob/b090dad8a3b53f937782676c6033ba3557cedfa1/control_clock/jax_ppo.py)
-(MIT), which follows [PureJaxRL](https://github.com/luchris429/purejaxrl)'s
-JAX/vmap/scan design (Apache-2.0; retained notice in `third_party/`).
-I replace qualification stopping with a fixed transition budget and evaluate
-once in Gymnax on a common fixed reset set. Optimizers and training randomness
-remain independent across root training seeds. This removes the affine-only
-limitation, not the small-task limitation, and introduces no new power formula.
-The historical and neural cohorts are separate experiments, not an algorithm
-ranking or a controlled causal comparison of policy classes.
+- Scores come from the last evaluation under a stopping policy, with a shared reset set used for both stopping and evaluation. Training budgets vary.
+- Plug-in power treats the observed gap and variances as population values. The 19/20 count describes these pairs, whose dependence rules out a binomial interval.
+- No Atari scores are included. The rliable archive was unavailable when this analysis was collected; [issue 31](https://github.com/google-research/rliable/issues/31) describes the access problem.

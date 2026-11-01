@@ -1,71 +1,91 @@
-# Reproduce the measurements
+# Running mendel
 
-## Recompute committed results
+## Analyze the saved scores
 
-These commands use the committed per-training-seed scores. They do not train policies or spend cloud compute. Each analyzer rebuilds the pilot plan and requires identical counts, statuses and hashes; floats such as modeled power may differ in their last bits across CPU architectures, and outputs keep the committed values. Regenerated PNGs and the last digits of `results/public*` can still differ across machines.
+Install the pinned Python environment:
 
 ```sh
 uv sync --locked --python 3.12
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/public_analysis.py
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/analyze.py confirmation
-uv run python scripts/figures.py
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/neural_analyze.py confirmation
-uv run python scripts/neural_figures.py
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/calibrate.py
-uv run python scripts/calibrate.py --check
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python scripts/null_diagnostics.py
-uv run python scripts/null_diagnostics.py --check
-uv run ruff check .
-uv run python -m pytest -q
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MPLBACKEND=Agg
 ```
 
-`scripts/calibrate.py` is the known-truth planning calibration ([method](CALIBRATION.md)). It simulates known populations and resamples the committed PPO roots, so it needs no training. It is seeded and writes the same tables on x86-64 and arm64; `--check` compares a fresh regeneration with the committed files, floats to a relative 1e-12, and fails if the README calibration table or its quoted numbers no longer match the report.
-
-`scripts/null_diagnostics.py` looks for the cause of the neural null-control rejections ([report](../results/neural/null_diagnostics.md)). It reruns five tests on every executed cell, resamples held-out committed base roots to estimate each test's size at the planned counts, and checks training batches, arms, phases and seed blocks. It trains nothing. `--check` regenerates the JSON, report and figure, compares them with the committed files (floats to a relative 1e-12, figure coordinates as for the calibration), checks the report's qualitative claims, and fails if a decimal or fraction quoted next to a link to the report in the README or neural protocol is not in the report.
-
-The optional `uv run python scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks the archive and raw-record hashes before regenerating `data/public_scores.csv`. The archive's MIT license is retained separately. No unavailable Atari data is required.
-
-## Repeat the original fresh-seed confirmation
-
-I committed and pushed the complete pilot and confirmation counts at
-[`3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b`](https://github.com/mottopanikeiku/mendel/commit/3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b)
-before starting confirmation. The runner requires that exact commit and plan; it refuses to overwrite an existing result directory. A repeat uses the same pseudorandom training seeds, so it is a reproducibility check, not new independent statistical evidence.
+These commands recompute the analyses and figures without training policies:
 
 ```sh
-git switch --detach 3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b
+uv run python scripts/public_analysis.py
+uv run python scripts/analyze.py confirmation
+uv run python scripts/figures.py
+uv run python scripts/neural_analyze.py confirmation
+uv run python scripts/neural_figures.py
+uv run python scripts/calibrate.py
+uv run python scripts/null_diagnostics.py
+```
+
+The affine and PPO analyzers rebuild the pilot plans, compare counts and statuses exactly, and check file hashes. They allow last-bit floating-point differences across CPU architectures and keep saved plan values in the outputs. Regenerated PNGs and the last digits of `results/public*` can differ across machines.
+
+The optional `scripts/import_public.py` downloads the pinned 0.7 MB coldstart archive and checks archive and score hashes before rebuilding `data/public_scores.csv`.
+
+## Tests and result checks
+
+```sh
+uv run ruff check .
+uv run python -m pytest -q
+uv run python scripts/calibrate.py --check
+uv run python scripts/null_diagnostics.py --check
+```
+
+The [calibration check](CALIBRATION.md) regenerates the simulation, resampling tables, report and figure in memory, then compares them with the saved outputs and README table. The [null-control check](../results/neural/null_diagnostics.md) recomputes five tests, resampling estimates and batch diagnostics; it also checks numbers quoted next to report links.
+
+Neural implementation tests need the optional CPU JAX dependencies:
+
+```sh
+uv sync --locked --python 3.12 --extra neural
+JAX_PLATFORMS=cpu uv run python -m pytest -q
+```
+
+CI installs this extra and runs on x86-64 and arm64. No GPU is needed for the tests.
+
+## Repeat the affine training run
+
+Training uses Modal and incurs cloud charges. The runner requires the exact plan revision and refuses to overwrite an existing result directory. Repeating these commands uses the original pseudorandom training seeds.
+
+```sh
+git switch --detach 55a5e58e9156069bd7ff33fa744cd1c27b3a0028
 uv sync --locked --python 3.12
-SEED_POWER_TIMEOUT_SECONDS=600 SEED_POWER_CONTAINERS=8 uv run modal run modal_app.py --stage confirmation --output results/replication/confirmation --plan-commit 3186fed41eddb6e58f4ab34f9c9c30ef00ad1f2b
+SEED_POWER_TIMEOUT_SECONDS=600 SEED_POWER_CONTAINERS=8 uv run modal run modal_app.py --stage confirmation --output results/replication/confirmation --plan-commit 55a5e58e9156069bd7ff33fa744cd1c27b3a0028
 uv run python scripts/analyze.py confirmation --confirmation results/replication/confirmation/runs.jsonl --output results/replication
 ```
 
-A Modal account is required only for training. Each container requests one CPU core and 1 GiB RAM; numerical libraries use one thread, with at most eight concurrent containers. The exact cloud environments and per-batch execution durations are in `results/*/environment.json`. Modal's sandbox reports the CPU model as unknown. I report cloud costs conservatively, not laptop training times or a throughput ranking.
+Each container requests one CPU core and 1 GiB RAM, with one numerical thread and at most eight concurrent containers. The [runtime file](../results/confirmation/environment.json) includes per-batch durations. Modal reported the CPU model as unknown.
 
-I estimate the original cloud compute, including failed attempts, at **$0.0221, rounded up to $0.03**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/cost.json)).
+## Repeat or resume PPO training
 
-## Export or reproduce neural PPO confirmation
-
-I pushed the complete neural count plan at
-[`260bebb4b1ab2d827ef06371b3681a0293f2b999`](https://github.com/mottopanikeiku/mendel/commit/260bebb4b1ab2d827ef06371b3681a0293f2b999)
-before any confirmation results. Transport commit `37e9e46` adds source-versioned, durable, resumable batches without changing the training code, design or count plan. Use a Python 3.12 client:
+The transport revision below supports resumable batches while keeping the original training code, design and count plan:
 
 ```sh
-git switch --detach 37e9e46
+git switch --detach 4681992
 uv sync --locked --python 3.12
-SEED_POWER_TIMEOUT_SECONDS=3600 uv run --python 3.12 modal run neural_modal.py --stage confirmation --output results/replication/neural --plan-commit 260bebb4b1ab2d827ef06371b3681a0293f2b999
+SEED_POWER_TIMEOUT_SECONDS=3600 uv run --python 3.12 modal run neural_modal.py --stage confirmation --output results/replication/neural --plan-commit 59cc9168e36e584d91decb3c98739c6754b34ef5
 uv run python scripts/neural_analyze.py confirmation --confirmation results/replication/neural/runs.jsonl --output results/replication/neural
 uv run python scripts/neural_figures.py --neural results/replication/neural/summary.json --output figures/replication
 ```
 
-Each GPU container requests one L4, two CPU cores and 8 GiB RAM; the concurrency limit is one. Roots are vmapped in batches of 64. Every complete batch is committed to the dedicated `seed-power-day-results` Volume before being returned. Existing batches for the same design, count plan, committed training-source tree and immutable runtime image are exported rather than retrained. Five sequential fresh-client attempts share the overall deadline, and rerunning resumes only missing batches. An empty cache trains the same pseudorandom roots again; that is reproducibility, not additional independent evidence. No model weights are downloaded. Per-batch persistence adds substantial cloud wall time; the throughput forecast measures training only, not total export time.
+One container requests an L4, two CPU cores and 8 GiB RAM, processing 64 policies per batch. Completed batches are saved to the `seed-power-day-results` Modal Volume. The cache keys include the design, plan, training source and runtime image. Rerunning exports saved batches and submits missing ones, with up to five sequential clients sharing the deadline. An empty cache retrains the original seeds.
 
-The CPU-only neural correctness tests are optional locally (`uv sync --locked --python 3.12 --extra neural`); CI installs that extra and exercises them. [Neural protocol and limitations](NEURAL_PROTOCOL.md).
+Batch persistence and export add cloud wall time beyond the training-only throughput estimate. [PPO experiment details](NEURAL_PROTOCOL.md).
 
-I estimate neural cloud compute, including failed attempts, at **$1.1905, rounded up to $1.20**. This is not an audited invoice and excludes recurring Volume storage ([cost record](../results/neural/cost.json)).
+## Cloud cost estimates
 
+| Experiment | Estimated compute, including failed attempts | Rounded up |
+|---|---:|---:|
+| [Affine](../results/cost.json) | $0.0221 | $0.03 |
+| [PPO](../results/neural/cost.json) | $1.1905 | $1.20 |
 
-## Run a new pilot and confirmation
+These estimates use allocated hardware and app wall time; they exclude recurring Volume storage.
 
-Edit the design and phase seed bases before collecting any outcomes. Keep every cell, choose the meaningful comparisons beforehand, and commit the design. Use a new output directory for each phase. The pilot's `--output` path must match the analyzer's `--pilot` argument. The original commands were:
+## Collect a new experiment
+
+Choose comparisons, design parameters and unused phase seed ranges before collecting scores. Use a new output directory for each phase. The pilot output path must match the analyzer's `--pilot` argument. The affine workflow is:
 
 ```sh
 SEED_POWER_TIMEOUT_SECONDS=300 uv run modal run modal_app.py --stage development --output results/development
@@ -75,4 +95,10 @@ uv run python scripts/analyze.py plan
 SEED_POWER_TIMEOUT_SECONDS=600 uv run modal run modal_app.py --stage confirmation --output results/confirmation --plan-commit YOUR_PUSHED_PLAN_COMMIT
 ```
 
-The maximum executable count is a design constraint, not a reduced count advertised as 80% power. Ineligible cells stay in the plan. For a prespecified meaningful raw mean difference, the stand-alone planner is `uv run python scripts/plan.py --effect 0.5 --sd-a 1 --sd-b 1`; its answer is per arm. Fix the target effect before looking at data. Add `--pilot-seeds N` when the SDs come from an N-seed-per-arm pilot: it applies Julious and Owen's noncentral-t allowance for pilot-variance uncertainty, the rule the [calibration](CALIBRATION.md) recommends. The planner does not model future variance drift.
+These experiment runners use the observed-gap planning rule studied in the training experiments. For the recommended fixed-effect rule, use the standalone planner with an effect chosen before the pilot:
+
+```sh
+uv run python scripts/plan.py --effect 0.5 --sd-a 1 --sd-b 1 --pilot-seeds 8
+```
+
+This gives 72 new seeds per arm, allowing for the uncertainty of SDs estimated from eight pilot seeds. The planner assumes the pilot and future runs share the same variance.
