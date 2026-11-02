@@ -2,58 +2,60 @@
 
 The NumPy batch implementation in `src/seed_power/vector_env.py` comes from
 [coldstart](https://github.com/mottopanikeiku/coldstart)
-(MIT, copyright 2026 Alp Cetin). It batches the default CartPole-v1 and
-Acrobot-v1 dynamics from Gymnasium 1.2.1. Both training and evaluation use
-these batches; tests compare them with `GymnasiumBatch`, the Gymnasium reference.
+(MIT, copyright 2026 Alp Cetin) and batches the default CartPole-v1 and
+Acrobot-v1 dynamics from Gymnasium 1.2.1. Training and evaluation both use
+these batches, and the tests compare them with `GymnasiumBatch`, the Gymnasium
+reference.
 
 ## Interface and episode handling
 
-`make_vector(task, num_envs)` exposes `num_envs`, `observation_size`, and
-`action_size`, plus:
+`make_vector(task, num_envs)` returns a batch that exposes `num_envs`,
+`observation_size`, and `action_size` along with four methods:
 
 - `reset(seeds)` takes a list containing one nonnegative Python integer per slot.
 - `step(actions, active=None)` takes integer actions of shape `(num_envs,)` and
   returns `(observations, rewards, terminated, truncated)`. Observations have
   shape `(num_envs, observation_size)` and dtype `float32`; flags are boolean.
 - `reset_done(mask, seeds)` takes a boolean mask of shape `(num_envs,)` and
-  one seed per selected slot, in ascending slot-index order. It returns the
-  full updated observation batch. Unselected state and elapsed counters are
-  unchanged. An empty selection accepts `[]` and changes nothing. Selected
-  slots need not already be done, allowing explicit episode restarts.
+  one seed per selected slot, in ascending slot-index order, and returns the
+  full updated observation batch while leaving unselected state and elapsed
+  counters unchanged. An empty selection accepts `[]` and changes nothing, and
+  selected slots need not already be done, which allows explicit episode
+  restarts.
 - `close()` releases Gymnasium environments and prevents subsequent use.
 
-Resets are explicit. The observation returned for a terminal or
-truncated transition is the final observation, not the next episode's start.
-Returned observation arrays are snapshots, so a subsequent partial reset does
-not overwrite observations retained by a rollout buffer. Training must reset
-finished slots separately. Stepping a finished active slot raises an error
+Resets are explicit, so the observation returned for a terminal or truncated
+transition is the final observation rather than the next episode's start, and
+training must reset finished slots separately. Returned observation arrays are
+snapshots, so a subsequent partial reset does not overwrite observations
+retained by a rollout buffer. Stepping a finished active slot raises an error
 rather than using Gymnasium's undefined post-termination behavior.
 
-Policy search can supply a boolean `active` mask of shape `(num_envs,)`.
-Inactive slots retain both their observations and elapsed counters, receive
-reward zero and return false termination/truncation flags for that call. Their
-previous done status is retained internally. Completed candidates wait while
-other candidates finish. Omitting the mask, or supplying all true, steps every slot.
+Policy search can supply a boolean `active` mask of shape `(num_envs,)` so that
+completed candidates wait while other candidates finish. Inactive slots keep
+their observations and elapsed counters, receive reward zero and return false
+termination/truncation flags for that call, while their previous done status is
+retained internally. Omitting the mask, or supplying all true, steps every slot.
 
-Episode truncation is `elapsed_steps >= 500`. Termination and truncation are
-independent: both may be true on the same transition. Partial resets clear only
-the selected counters and done status. Runtime validation rejects wrong action
-shapes, noninteger/out-of-range actions, invalid mask shapes/dtypes and seed
-lists with incorrect lengths or invalid elements.
+An episode is truncated once `elapsed_steps >= 500`, independently of
+termination, so both flags may be true on the same transition. Partial resets
+clear only the selected counters and done status, and runtime validation
+rejects wrong action shapes, noninteger/out-of-range actions, invalid mask
+shapes/dtypes and seed lists with incorrect lengths or invalid elements.
 
 ## Numerical precision
 
 Each classic-control reset draws four uniforms from a newly seeded
 `np.random.default_rng(seed)`, matching Gymnasium's PCG64 generator. CartPole
 uses reset bounds `[-0.05, 0.05]`, its default explicit Euler integrator and
-float64 internal dynamics. Its default reward is one, including the transition
-that terminates the episode.
+float64 internal dynamics, and its default reward is one, including on the
+transition that terminates the episode.
 
-Acrobot uses reset bounds `[-0.1, 0.1]`. Gymnasium rounds the initial internal
-state to float32. This implementation keeps that rounding, then promotes the
-state to float64. Its reset observation also uses float32 trigonometry, matching
-Gymnasium; later observations are rounded
-from float64 dynamics. Each action applies torque `-1`, `0` or `1`; the default
+Acrobot uses reset bounds `[-0.1, 0.1]`, and because Gymnasium rounds the
+initial internal state to float32, this implementation keeps that rounding
+before promoting the state to float64. Its reset observation also uses float32
+trigonometry, matching Gymnasium, while later observations are rounded from
+float64 dynamics. Each action applies torque `-1`, `0` or `1`, and the default
 "book" equations use a single RK4 step of duration `0.2`. After integration,
 angles are wrapped into inclusive `[-pi, pi]` (both endpoints are retained),
 and velocities are clipped to `[-4*pi, 4*pi]` and `[-9*pi, 9*pi]`. Reward is
@@ -65,14 +67,14 @@ The fixed observation and internal-state comparison is `numpy.testing.assert_all
 `atol=2e-6`, `rtol=2e-7`. This permits float32 output rounding and small
 scalar-versus-array ufunc differences without feeding rounded observations
 back into the integrator. The maximum permitted discrepancy is
-`2e-6 + 2e-7 * abs(reference_value)`; at Acrobot's largest velocity it is
-under `8e-6`. Rewards, termination and truncation flags are compared exactly;
-there is no tolerance for decisions or episode lengths.
+`2e-6 + 2e-7 * abs(reference_value)`, which at Acrobot's largest velocity is
+under `8e-6`. Rewards, termination and truncation flags are compared exactly,
+so there is no tolerance for decisions or episode lengths.
 
-`tests/test_training.py` compares seeded batch transitions with independent
-Gymnasium environments, including masks and resets. Rewards and episode flags
-must match exactly. Float observations use the stated tolerance. The reference
-does not share this repository's physics implementation.
+`tests/test_training.py` compares seeded batch transitions, including masks and
+resets, with independent Gymnasium environments that don't share this
+repository's physics implementation. Rewards and episode flags must match
+exactly, while float observations use the stated tolerance.
 
 ## Sources and licenses
 
@@ -86,11 +88,11 @@ from the following pinned primary sources:
 - [Gymnasium 1.2.1 seeding](https://github.com/Farama-Foundation/Gymnasium/blob/v1.2.1/gymnasium/utils/seeding.py)
   and [task registrations](https://github.com/Farama-Foundation/Gymnasium/blob/v1.2.1/gymnasium/envs/__init__.py).
 
-Gymnasium is MIT-licensed. Its Acrobot source additionally credits the RLPy
-implementation under BSD-3-Clause: Alborz Geramifard, Robert H. Klein,
-Christoph Dann, William Dabney and Jonathan P. How; author Christoph Dann.
-The notices are included here. The batch layout and explicit-reset interface
-come from coldstart.
+Gymnasium is MIT-licensed, and its Acrobot source also credits the RLPy
+implementation, which is BSD-3-Clause and by Alborz Geramifard, Robert H. Klein,
+Christoph Dann, William Dabney and Jonathan P. How, with Christoph Dann as
+author. The batch layout and explicit-reset interface come from coldstart, and
+both upstream notices are reproduced below.
 
 ### Gymnasium MIT notice
 
