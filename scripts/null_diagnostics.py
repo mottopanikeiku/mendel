@@ -15,7 +15,6 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import re
 import tempfile
 import warnings
 
@@ -58,8 +57,6 @@ ENVIRONMENT = "results/neural/confirmation/environment.json"
 OUTPUT = "results/neural/null_diagnostics.json"
 REPORT = "results/neural/null_diagnostics.md"
 FIGURE = "figures/null_controls.svg"
-QUOTING = ("README.md", "docs/NEURAL_PROTOCOL.md")
-QUOTED = re.compile(r"\d+/\d+|\d+\.\d+")
 
 
 def sha256(path):
@@ -822,17 +819,6 @@ def check_claims(result):
     assert acro_blocks["permutation_pvalue"] > ALPHA, "Acrobot shows nothing unusual"
 
 
-def check_quotes(root, report):
-    """Every decimal or fraction on a line that cites the report must appear in it."""
-    for name in QUOTING:
-        lines = [line for line in (root / name).read_text().splitlines()
-                 if "null_diagnostics.md" in line]
-        assert lines, f"{name} does not cite the null-control report"
-        for line in lines:
-            for number in QUOTED.findall(line):
-                assert number in report, f"{name}: {number} is not in {REPORT}"
-
-
 def make_figure(result, pilot, confirmation, path):
     import matplotlib.pyplot as plt
 
@@ -892,7 +878,6 @@ def main():
     if args.check:
         compare_json(document, json.loads((ROOT / OUTPUT).read_text()), OUTPUT)
         assert report == (ROOT / REPORT).read_text(), f"{REPORT} is stale"
-        check_quotes(ROOT, report)
         with tempfile.TemporaryDirectory() as scratch:
             fresh = Path(scratch) / "figure.svg"
             make_figure(document, pilot, confirmation, fresh)

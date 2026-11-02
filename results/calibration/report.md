@@ -156,4 +156,4 @@ The resampled rate falls inside the training result's Wilson interval for 9 of 1
 - Resampling reuses trained policies across replicates and conditions on fixed evaluation resets. It does not add training seeds.
 - The intervals are pointwise; comparisons across them are not joint tests.
 
-`uv run python scripts/calibrate.py` generates this report, the adjacent tables and [figure](../../figures/known_truth.svg). [Method](../../docs/CALIBRATION.md).
+`uv run python scripts/calibrate.py` generates this report, the adjacent tables and [figure](../../figures/known_truth.svg). [Method](../../docs/method.md).

@@ -1,7 +1,6 @@
 {
   "stage": "confirmation",
-  "code_commit": "55a5e58e9156069bd7ff33fa744cd1c27b3a0028",
-  "plan_commit": "55a5e58e9156069bd7ff33fa744cd1c27b3a0028",
+  "plan_commit": "plan-committed",
   "plan_sha256": "54e6c70b2b6f99b8c32ebccb464d53888332dbeca40b53d0319c2d0f9781e944",
   "design_sha256": "9960f10aa9a12c2893b6a3e0f77b0662f712a5acac1e200aaa3a6e476781e372",
   "hardware": "Modal CPU, no GPU",

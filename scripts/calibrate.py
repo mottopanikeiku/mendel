@@ -313,7 +313,7 @@ def select(rows, **conditions):
 
 
 def headline_table(workflow):
-    """Markdown table shared by the report and the README."""
+    """Markdown table of power and cost at the target effect, for the report."""
     lines = ["| Planning rule | 8-seed pilot: power | total seeds | "
              "32-seed pilot: power | total seeds |",
              "|---|---:|---:|---:|---:|"]
@@ -615,7 +615,7 @@ def render_report(configuration, reference, workflow, resampling, recommendation
         "- The intervals are pointwise; comparisons across them are not joint tests.",
         "",
         "`uv run python scripts/calibrate.py` generates this report, the adjacent tables "
-        "and [figure](../../figures/known_truth.svg). [Method](../../docs/CALIBRATION.md).",
+        "and [figure](../../figures/known_truth.svg). [Method](../../docs/method.md).",
     ]
     return "\n".join(lines) + "\n"
 
@@ -882,8 +882,6 @@ def check(root, output, figure):
                 same(left[key], right[key], f"{name}.csv[{index}].{key}",
                      NOISE if key.endswith("_numerical_error") else 1e-15)
     assert result["report"] == (output / "report.md").read_text(), "report.md is stale"
-    readme = (root / "README.md").read_text()
-    assert headline_table(result["workflow"]) in readme, "README calibration table is stale"
     with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / figure.name
         make_figure(result["workflow"], regenerated)

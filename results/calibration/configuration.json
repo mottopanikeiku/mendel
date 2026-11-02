@@ -1816,7 +1816,7 @@
       "results/neural/pilot_plan.json": "743a697458d9959eccb276d464275bdd534ac8134f0d16558b6ad27cd530c187",
       "results/neural/pilot/runs.jsonl.gz": "5b43eed609ff4bae136c806c391978a74dc50a2f504e0422f51fe72b107f501b",
       "results/neural/confirmation/runs.jsonl.gz": "7f1cf4b9dd81d7d76aef9da6110adeded528f2c6614c9cb2e010aca1beebb871",
-      "results/neural/summary.json": "c8059095a0a6b7eb56adde806183ae79cb6a607d9b8dfd6907a88a4139c9ec35"
+      "results/neural/summary.json": "7268a1af0004010334a37c1f99ae43d809fe2967da09b6197d0a23ba25272d54"
     },
     "pools": [
       {

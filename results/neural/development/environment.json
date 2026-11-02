@@ -1,6 +1,5 @@
 {
   "stage": "development",
-  "code_commit": "8480f170fe79f85f1670d62ca4c5795071ff233e",
   "plan_commit": null,
   "plan_sha256": null,
   "design_sha256": "bb7a5ed56a419bf6644c74541ac7085be484c4ea04691dc0a118aa3125d71759",

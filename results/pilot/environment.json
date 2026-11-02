@@ -1,6 +1,5 @@
 {
   "stage": "pilot",
-  "code_commit": "f791d5b1d9fd4c850a5e8d7db71f56f7eac30e8b",
   "plan_commit": null,
   "plan_sha256": null,
   "design_sha256": "9960f10aa9a12c2893b6a3e0f77b0662f712a5acac1e200aaa3a6e476781e372",

@@ -1,7 +1,7 @@
 # Batch environments
 
 The NumPy batch implementation in `src/seed_power/vector_env.py` comes from
-[coldstart](https://github.com/mottopanikeiku/coldstart/blob/ee9c303de8e7698ca25569fc585e173e3e172bb8/control_clock/vector_env.py)
+[coldstart](https://github.com/mottopanikeiku/coldstart)
 (MIT, copyright 2026 Alp Cetin). It batches the default CartPole-v1 and
 Acrobot-v1 dynamics from Gymnasium 1.2.1. Both training and evaluation use
 these batches; tests compare them with `GymnasiumBatch`, the Gymnasium reference.

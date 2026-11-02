@@ -17,7 +17,7 @@ def main() -> None:
     parser.add_argument("--sd-b", type=float, required=True, help="Seed-level SD in arm B")
     parser.add_argument("--pilot-seeds", type=int,
                         help="Pilot seeds per arm behind the SDs; adds the Julious-Owen "
-                             "allowance for their uncertainty, the rule docs/CALIBRATION.md "
+                             "allowance for their uncertainty, the rule docs/method.md "
                              "recommends")
     parser.add_argument("--power", type=float, default=0.8, help="Target power (default: 0.8)")
     parser.add_argument("--alpha", type=float, default=0.05, help="Two-sided size (default: 0.05)")

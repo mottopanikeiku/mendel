@@ -56,7 +56,8 @@ def main(stage: str = "development", output: str = "results/development",
     plans = None
     plan_sha = None
     if stage == "confirmation":
-        if not plan_commit or commit != plan_commit:
+        if not plan_commit or commit != subprocess.check_output(
+                ["git", "rev-parse", f"{plan_commit}^{{commit}}"], text=True).strip():
             raise ValueError("run confirmation from the exact pushed plan commit")
         committed = subprocess.check_output(["git", "show", f"{plan_commit}:{plan_path}"])
         if committed != Path(plan_path).read_bytes():

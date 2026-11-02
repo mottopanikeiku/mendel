@@ -177,7 +177,7 @@ def plan_seeds_with_pilot_uncertainty(
     value at the planned Welch df. That averages one-tailed power over the
     chi-square uncertainty of the pilot variance. ``effect`` should be fixed
     before the pilot, not the pilot's gap. Return None for zero effect or zero
-    total variance, as plan_seeds does. docs/CALIBRATION.md calibrates this rule.
+    total variance, as plan_seeds does. docs/method.md calibrates this rule.
     """
     effect, variance_a, variance_b, alpha = _planning_inputs(
         effect, variance_a, variance_b, alpha

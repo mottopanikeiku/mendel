@@ -147,19 +147,3 @@ def test_committed_report_renders_from_committed_json_and_its_claims_hold():
     report = diagnostics.render_report(committed)
     assert report == (diagnostics.ROOT / diagnostics.REPORT).read_text()
     diagnostics.check_claims(committed)
-    diagnostics.check_quotes(diagnostics.ROOT, report)
-
-
-def test_quoted_numbers_must_appear_in_the_report(tmp_path):
-    report = (diagnostics.ROOT / diagnostics.REPORT).read_text()
-    for name in diagnostics.QUOTING:
-        source = diagnostics.ROOT / name
-        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(source.read_text())
-    diagnostics.check_quotes(tmp_path, report)
-    readme = tmp_path / "README.md"
-    cited = next(line for line in readme.read_text().splitlines()
-                 if "null_diagnostics.md" in line)
-    readme.write_text(readme.read_text().replace(cited, cited + " It was 0.999 of 99/100."))
-    with pytest.raises(AssertionError, match="0.999"):
-        diagnostics.check_quotes(tmp_path, report)

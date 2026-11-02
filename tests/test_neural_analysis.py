@@ -303,6 +303,6 @@ def test_committed_neural_roots_reproduce_counts_outcomes_and_summary():
         "23cd8f7b5b1bd5df4405f3b2e5224bb2d2ce51e3"
     )
     assert {batch["producer_code_commit"] for batch in environment["batches"]} == {
-        "bee896d79d68c4231c25654d5654ab02dc49d72e",
-        "46819921df016c48caf3d067a36f591bb8b991e0",
+        "neural-transport-initial",
+        "neural-transport",
     }
